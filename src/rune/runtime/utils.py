@@ -190,7 +190,7 @@ def _get_conditions(cls) -> list:
 
 
 class MetaAddress(BaseModel):  # pylint: disable=missing-class-docstring
-    scope: str
+    scope: str | None = None
     value: str
 
 
@@ -370,7 +370,7 @@ class AttributeWithMeta(BaseModel, Generic[ValueT]):
 class AttributeWithAddress(BaseModel, Generic[ValueT]):
     '''Meta support'''
     address: MetaAddress | None = None
-    value: ValueT
+    value: ValueT | None = None
 
 
 class AttributeWithReference(BaseDataClass):
