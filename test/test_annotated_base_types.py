@@ -1,9 +1,14 @@
 '''test module for the annotated base rune types'''
+from datetime import date, datetime
 from rune.runtime.utils import BaseDataClass
 from rune.runtime.annotated_base_types import AnnotatedString
 from rune.runtime.annotated_base_types import AnnotatedStringProperty
 from rune.runtime.annotated_base_types import AnnotatedNumber
 from rune.runtime.annotated_base_types import AnnotatedNumberProperty
+from rune.runtime.annotated_base_types import AnnotatedDate
+from rune.runtime.annotated_base_types import AnnotatedDateProperty
+from rune.runtime.annotated_base_types import AnnotatedDateTime
+from rune.runtime.annotated_base_types import AnnotatedDateTimeProperty
 
 
 class AnnotatedStringModel(BaseDataClass):
@@ -14,6 +19,16 @@ class AnnotatedStringModel(BaseDataClass):
 class AnnotatedNumberModel(BaseDataClass):
     '''number test class'''
     amount: AnnotatedNumberProperty
+
+
+class AnnotatedDateModel(BaseDataClass):
+    '''date test class'''
+    date: AnnotatedDateProperty
+
+
+class AnnotatedDateTimeModel(BaseDataClass):
+    '''datetime test class'''
+    datetime: AnnotatedDateTimeProperty
 
 
 def test_dump_annotated_string_simple():
@@ -96,5 +111,44 @@ def test_load_annotated_number_scheme():
     model = AnnotatedNumberModel.model_validate_json(scheme_json)
     assert model.amount == 10, 'amount differs'
     assert model.amount.scheme == 'http://fpml.org', 'scheme differs'
+
+
+def test_dump_annotated_date_simple():
+    '''test the annotated string'''
+    model = AnnotatedDateModel(date="2024-10-10")
+    json_str = model.model_dump_json(exclude_unset=True)
+    assert json_str == '{"date":{"@data":"2024-10-10"}}'
+
+    model = AnnotatedDateModel(date=AnnotatedDate("2024-10-10"))
+    json_str = model.model_dump_json(exclude_unset=True)
+    assert json_str == '{"date":{"@data":"2024-10-10"}}'
+
+
+def test_load_annotated_date_scheme():
+    '''test the loading of annotated with a scheme strings'''
+    scheme_json = '{"date":{"@data":"2024-10-10","@scheme":"http://fpml.org"}}'
+    model = AnnotatedDateModel.model_validate_json(scheme_json)
+    assert model.date == date(2024, 10, 10), 'date differs'
+    assert model.date.scheme == 'http://fpml.org', 'scheme differs'
+
+
+def test_dump_annotated_datetime_simple():
+    '''test the annotated string'''
+    model = AnnotatedDateTimeModel(datetime="2024-10-10 01:01:01")
+    json_str = model.model_dump_json(exclude_unset=True)
+    assert json_str == '{"datetime":{"@data":"2024-10-10T01:01:01"}}'
+
+    model = AnnotatedDateTimeModel(
+        datetime=AnnotatedDateTime("2024-10-10T01:01:01"))
+    json_str = model.model_dump_json(exclude_unset=True)
+    assert json_str == '{"datetime":{"@data":"2024-10-10T01:01:01"}}'
+
+
+def test_load_annotated_datetime_scheme():
+    '''test the loading of annotated with a scheme strings'''
+    scheme_json = '{"datetime":{"@data":"2024-10-10T01:01:01","@scheme":"http://fpml.org"}}'
+    model = AnnotatedDateTimeModel.model_validate_json(scheme_json)
+    assert model.datetime == datetime(2024, 10, 10, 1, 1, 1), 'date differs'
+    assert model.datetime.scheme == 'http://fpml.org', 'scheme differs'
 
 # EOF
