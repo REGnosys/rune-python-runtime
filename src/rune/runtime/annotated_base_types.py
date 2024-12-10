@@ -1,7 +1,7 @@
 '''Classes representing annotated basic Rune types'''
 from functools import partial
 from decimal import Decimal
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pydantic import PlainSerializer, PlainValidator
 from typing_extensions import Annotated
 
@@ -31,11 +31,35 @@ class AnnotatedDate(date):
         return obj
 
 
+class AnnotatedTime(time):
+    '''annotated time'''
+    def __new__(cls, value, scheme=None):
+        aux = time.fromisoformat(value)
+        obj = time.__new__(cls,
+                           aux.hour,
+                           aux.minute,
+                           aux.second,
+                           aux.microsecond,
+                           aux.tzinfo,
+                           fold=aux.fold)
+        obj.scheme = scheme
+        return obj
+
+
 class AnnotatedDateTime(datetime):
     '''annotated datetime'''
     def __new__(cls, value, scheme=None):
-        ymdhms = datetime.fromisoformat(value).timetuple()[:6]
-        obj = datetime.__new__(cls, *ymdhms)
+        aux = datetime.fromisoformat(value)
+        obj = datetime.__new__(cls,
+                               aux.year,
+                               aux.month,
+                               aux.day,
+                               aux.hour,
+                               aux.minute,
+                               aux.second,
+                               aux.microsecond,
+                               aux.tzinfo,
+                               fold=aux.fold)
         obj.scheme = scheme
         return obj
 
@@ -88,6 +112,10 @@ _serialise_datetime_with_scheme = partial(_serialise_with_scheme, base_type=str)
 _deserialize_datetime_with_scheme = partial(_deserialize_with_scheme,
                                             base_types=str,
                                             annotated_type=AnnotatedDateTime)
+_serialise_time_with_scheme = partial(_serialise_with_scheme, base_type=str)
+_deserialize_time_with_scheme = partial(_deserialize_with_scheme,
+                                        base_types=str,
+                                        annotated_type=AnnotatedTime)
 
 
 AnnotatedStringProperty = Annotated[
@@ -118,6 +146,12 @@ AnnotatedDateTimeProperty = Annotated[
     AnnotatedDate,
     PlainSerializer(_serialise_datetime_with_scheme, return_type=dict),
     PlainValidator(_deserialize_datetime_with_scheme,
+                   json_schema_input_type=str | dict)]
+
+AnnotatedTimeProperty = Annotated[
+    AnnotatedDate,
+    PlainSerializer(_serialise_time_with_scheme, return_type=dict),
+    PlainValidator(_deserialize_time_with_scheme,
                    json_schema_input_type=str | dict)]
 
 # EOF
