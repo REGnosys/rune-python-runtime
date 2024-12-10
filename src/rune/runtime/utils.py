@@ -197,7 +197,9 @@ class BaseDataClass(BaseModel):
         but is left to the user to determine when to check the validity of the
         cdm model.
     '''
-    model_config = ConfigDict(extra='forbid', revalidate_instances='always')
+    model_config = ConfigDict(extra='forbid',
+                              revalidate_instances='always',
+                              arbitrary_types_allowed=True)
 
     meta: dict | None = None
     address: MetaAddress | None = None

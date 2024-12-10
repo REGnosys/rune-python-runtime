@@ -7,7 +7,7 @@ name = "rune.runtime"
 dynamic = ["version"]
 requires-python = ">=3.10"
 dependencies = [
-   "pydantic>=2.6.1,<2.10"
+   "pydantic>=2.10.3"
 ]
 optional-dependencies.dev = [
     "pytest"
@@ -15,8 +15,8 @@ optional-dependencies.dev = [
 description = "rune-runtime: the Rune DSL runtime for Python"
 readme = "README.md"
 keywords = [
-    "test",
-    "unittest",
+    "rune",
+    "rune runtime",
 ]
 license = { text = "APACHE 2.0" }
 authors = [
