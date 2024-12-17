@@ -1,6 +1,8 @@
 '''Classes representing annotated basic Rune types'''
+from functools import partial, lru_cache
 from decimal import Decimal
 from datetime import date, datetime, time
+from pydantic import PlainSerializer, PlainValidator
 
 META_CONTAINER = '__rune_metadata'
 
@@ -52,6 +54,24 @@ class MetaDataMixin:
         data = obj.pop('@data')
         cls._check_allowed(obj, allowed_meta)
         return meta_type(data, **obj)
+
+    @classmethod
+    @lru_cache
+    def plain_serializer(cls):
+        '''should return the validator for the specific class'''
+        ser_fn = partial(MetaDataMixin.serialise, base_type=str)
+        return PlainSerializer(ser_fn, return_type=dict)
+
+    @classmethod
+    @lru_cache
+    def plain_validator(cls, allowed_meta: tuple[str]):
+        '''default validator for the specific class'''
+        allowed = set(allowed_meta)
+        return PlainValidator(partial(MetaDataMixin.deserialize,
+                                      base_types=str,
+                                      meta_type=cls,
+                                      allowed_meta=allowed),
+                              json_schema_input_type=str | dict)
 
     def set_meta(self, **kwds):
         '''set some/all metadata properties'''
@@ -125,6 +145,24 @@ class IntWithMeta(int, MetaDataMixin):
         obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
         return obj
 
+    @classmethod
+    @lru_cache
+    def plain_serializer(cls):
+        '''should return the validator for the specific class'''
+        ser_fn = partial(MetaDataMixin.serialise, base_type=int)
+        return PlainSerializer(ser_fn, return_type=dict)
+
+    @classmethod
+    @lru_cache
+    def plain_validator(cls, allowed_meta: tuple[str]):
+        '''default validator for the specific class'''
+        allowed = set(allowed_meta)
+        return PlainValidator(partial(MetaDataMixin.deserialize,
+                                      base_types=int,
+                                      meta_type=cls,
+                                      allowed_meta=allowed),
+                              json_schema_input_type=int | dict)
+
 
 class NumberWithMeta(Decimal, MetaDataMixin):
     '''annotated number'''
@@ -132,6 +170,24 @@ class NumberWithMeta(Decimal, MetaDataMixin):
         obj = Decimal.__new__(cls, value)
         obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
         return obj
+
+    @classmethod
+    @lru_cache
+    def plain_serializer(cls):
+        '''should return the validator for the specific class'''
+        ser_fn = partial(MetaDataMixin.serialise, base_type=Decimal)
+        return PlainSerializer(ser_fn, return_type=dict)
+
+    @classmethod
+    @lru_cache
+    def plain_validator(cls, allowed_meta: tuple[str]):
+        '''default validator for the specific class'''
+        allowed = set(allowed_meta)
+        return PlainValidator(partial(MetaDataMixin.deserialize,
+                                      base_types=(Decimal, float, int, str),
+                                      meta_type=cls,
+                                      allowed_meta=allowed),
+                              json_schema_input_type=float | int | str | dict)
 
 
 # _serialise_str_with_scheme = partial(_serialise_with_scheme, base_type=str)
