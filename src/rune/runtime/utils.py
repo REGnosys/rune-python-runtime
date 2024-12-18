@@ -230,7 +230,7 @@ class BaseDataClass(BaseModel):
         try:
             self.model_validate(self, strict=strict)
         except ValidationError as validation_error:
-            if raise_exc and validation_error:
+            if raise_exc:
                 raise validation_error
             return [validation_error]
         return []

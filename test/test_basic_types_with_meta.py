@@ -1,16 +1,17 @@
 '''test module for the annotated base rune types'''
 from datetime import date, time, datetime
+from decimal import Decimal
 import json
 import pytest
 from typing_extensions import Annotated
 from pydantic import Field, ValidationError
 
 from rune.runtime.utils import BaseDataClass
-from rune.runtime.annotated_base_types import NumberWithMeta
-from rune.runtime.annotated_base_types import DateWithMeta
-from rune.runtime.annotated_base_types import DateTimeWithMeta
-from rune.runtime.annotated_base_types import TimeWithMeta
-from rune.runtime.annotated_base_types import StrWithMeta
+from rune.runtime.metadata import NumberWithMeta
+from rune.runtime.metadata import DateWithMeta
+from rune.runtime.metadata import DateTimeWithMeta
+from rune.runtime.metadata import TimeWithMeta
+from rune.runtime.metadata import StrWithMeta
 
 
 class AnnotatedStringModel(BaseDataClass):
@@ -26,8 +27,8 @@ class AnnotatedStringModel(BaseDataClass):
     #                    json_schema_input_type=str | dict)] = Field(
     #                        ..., description="Test currency")
     currency: Annotated[StrWithMeta,
-                        StrWithMeta.plain_serializer(),
-                        StrWithMeta.plain_validator(('@scheme',))
+                        StrWithMeta.serializer(),
+                        StrWithMeta.validator(('@scheme',))
     ] = Field(..., description="Test currency")
 
 
@@ -44,9 +45,9 @@ class AnnotatedNumberModel(BaseDataClass):
     #                    json_schema_input_type=float | int | str
     #                    | dict)] = Field(..., description="Test amount")
     amount: Annotated[NumberWithMeta,
-                      NumberWithMeta.plain_serializer(),
-                      NumberWithMeta.plain_validator(('@scheme',))
-    ] = Field(..., description="Test amount")
+                      NumberWithMeta.serializer(),
+                      NumberWithMeta.validator(('@scheme',))
+    ] = Field(..., description="Test amount", decimal_places=3)
 
 
 class AnnotatedDateModel(BaseDataClass):
@@ -62,8 +63,8 @@ class AnnotatedDateModel(BaseDataClass):
     #                    json_schema_input_type=str | dict)] = Field(
     #                        ..., description="Test date")
     date: Annotated[DateWithMeta,
-                    DateWithMeta.plain_serializer(),
-                    DateWithMeta.plain_validator(('@scheme',))
+                    DateWithMeta.serializer(),
+                    DateWithMeta.validator(('@scheme',))
     ] = Field(..., description="Test date")
 
 
@@ -80,8 +81,8 @@ class AnnotatedDateTimeModel(BaseDataClass):
     #                    json_schema_input_type=str | dict)] = Field(
     #                        ..., description="Test datetime")
     datetime: Annotated[DateTimeWithMeta,
-                        DateTimeWithMeta.plain_serializer(),
-                        DateTimeWithMeta.plain_validator(('@scheme',))
+                        DateTimeWithMeta.serializer(),
+                        DateTimeWithMeta.validator(('@scheme',))
     ] = Field(..., description="Test datetime")
 
 
@@ -98,8 +99,8 @@ class AnnotatedTimeModel(BaseDataClass):
     #                    json_schema_input_type=str | dict)] = Field(
     #                        ..., description="Test datetime")
     time: Annotated[TimeWithMeta,
-                    TimeWithMeta.plain_serializer(),
-                    TimeWithMeta.plain_validator(('@scheme',))
+                    TimeWithMeta.serializer(),
+                    TimeWithMeta.validator(('@scheme',))
     ] = Field(..., description="Test time")
 
 
@@ -116,9 +117,18 @@ class StrWithMetaModel(BaseDataClass):
     #                    json_schema_input_type=str | dict)] = Field(
     #                        ..., description="Test currency")
     currency: Annotated[StrWithMeta,
-                        StrWithMeta.plain_serializer(),
-                        StrWithMeta.plain_validator(('@scheme', '@key'))
+                        StrWithMeta.serializer(),
+                        StrWithMeta.validator(('@scheme', '@key'))
     ] = Field(..., description="Test currency")
+
+
+class StrWithMetaAndConstraintsModel(BaseDataClass):
+    '''meta and string constraints test case'''
+    currency: Annotated[StrWithMeta,
+                        StrWithMeta.serializer(),
+                        StrWithMeta.validator(('@scheme', '@key'))
+    ] = Field(..., description="Test currency",
+              min_length=3, max_length=5, pattern=r'^[A-Z]*$')
 
 
 def test_dump_annotated_string_simple():
@@ -170,9 +180,9 @@ def test_dump_annotated_number_simple():
     json_str = model.model_dump_json(exclude_unset=True)
     assert json_str == '{"amount":{"@data":"10"}}', 'explicit int failed'
 
-    model = AnnotatedNumberModel(amount="10.3")
+    model = AnnotatedNumberModel(amount="10.344")
     json_str = model.model_dump_json(exclude_unset=True)
-    assert json_str == '{"amount":{"@data":"10.3"}}', 'explicit string failed'
+    assert json_str == '{"amount":{"@data":"10.344"}}', 'explicit string failed'
 
     model = AnnotatedNumberModel(amount=NumberWithMeta(10))
     json_str = model.model_dump_json(exclude_unset=True)
@@ -197,9 +207,9 @@ def test_load_annotated_number():
     model = AnnotatedNumberModel.model_validate_json(scheme_json)
     assert model.amount == 10, 'int amount differs'
 
-    scheme_json = '{"amount":{"@data":10.3}}'
+    scheme_json = '{"amount":{"@data":"10.3"}}'
     model = AnnotatedNumberModel.model_validate_json(scheme_json)
-    assert model.amount == 10.3, 'float amount differs'
+    assert model.amount == Decimal("10.3"), 'float amount differs'
 
 
 def test_load_annotated_number_scheme():
@@ -208,6 +218,25 @@ def test_load_annotated_number_scheme():
     model = AnnotatedNumberModel.model_validate_json(scheme_json)
     assert model.amount == 10, 'amount differs'
     assert model.amount.get_meta('@scheme') == 'http://fpml.org'
+
+
+def test_fail_load_annotated_number():
+    '''test the loading of annotated with a scheme strings'''
+    scheme_json = '{"amount":{"@data":"10.1234","@scheme":"http://fpml.org"}}'
+    with pytest.raises(ValidationError):
+        AnnotatedNumberModel.model_validate_json(scheme_json)
+
+
+def test_fail_create_annotated_number():
+    '''test the loading of annotated with a scheme strings'''
+    with pytest.raises(ValidationError):
+        AnnotatedNumberModel(amount=NumberWithMeta("1.1234"))
+
+
+def test_fail_create_annotated_number_():
+    '''test the loading of annotated with a scheme strings'''
+    with pytest.raises(ValidationError):
+        AnnotatedNumberModel(amount="10.1234")
 
 
 def test_dump_annotated_date_simple():
@@ -306,5 +335,29 @@ def test_generic_string_with_forbidden_meta():
     with pytest.raises(ValidationError):
         StrWithMetaModel(currency=StrWithMeta(
             'EUR', scheme='http://fpml.org', key='currency-1', ref='blah'))
+
+
+def test_create_constrained_str_model():
+    '''test the creation of the constrained str model'''
+    model = StrWithMetaAndConstraintsModel(currency='EUR')
+    assert model.currency == 'EUR'
+
+
+def test_fail_min_create_constrained_str_model():
+    '''test the creation of the constrained str model'''
+    with pytest.raises(ValidationError):
+        StrWithMetaAndConstraintsModel(currency='EU')
+
+
+def test_fail_max_create_constrained_str_model():
+    '''test the creation of the constrained str model'''
+    with pytest.raises(ValidationError):
+        StrWithMetaAndConstraintsModel(currency='EUROOO')
+
+
+def test_fail_pattern_create_constrained_str_model():
+    '''test the creation of the constrained str model'''
+    with pytest.raises(ValidationError):
+        StrWithMetaAndConstraintsModel(currency='EUR1')
 
 # EOF
