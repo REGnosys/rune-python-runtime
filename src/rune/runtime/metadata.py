@@ -13,8 +13,8 @@ def _py_to_ser_key(key: str) -> str:
     return '@' + key.replace('_', ':')
 
 
-class MetaDataMixin:
-    '''holds the metadata associated with an instance'''
+class BaseMetaDataMixin:
+    '''Base class for the meta data support of basic amd complex types'''
     _metadata_keys = {
         '@scheme', '@key', '@ref', '@key:external', '@ref:external',
         '@key:scoped', '@ref:scoped'
@@ -26,6 +26,21 @@ class MetaDataMixin:
         if not keys.issubset(allowed_meta):
             raise ValueError('Not allowed metadata provided: '
                              f'{keys - allowed_meta}')
+
+    def set_meta(self, **kwds):
+        '''set some/all metadata properties'''
+        props = {_py_to_ser_key(k): v for k, v in kwds.items()}
+        self._check_allowed(props, self._metadata_keys)
+        meta = self.__dict__.setdefault(META_CONTAINER, {})
+        meta |= props
+
+    def get_meta(self, name: str):
+        '''get a metadata property'''
+        return self.__dict__.get(META_CONTAINER, {}).get(_py_to_ser_key(name))
+
+
+class BasicTypeMetaDataMixin(BaseMetaDataMixin):
+    '''holds the metadata associated with an instance'''
 
     @classmethod
     def serialise(cls,
@@ -59,7 +74,7 @@ class MetaDataMixin:
     @lru_cache
     def serializer(cls):
         '''should return the validator for the specific class'''
-        ser_fn = partial(MetaDataMixin.serialise, base_type=str)
+        ser_fn = partial(cls.serialise, base_type=str)
         return PlainSerializer(ser_fn, return_type=dict)
 
     @classmethod
@@ -67,25 +82,14 @@ class MetaDataMixin:
     def validator(cls, allowed_meta: tuple[str]):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
-        return BeforeValidator(partial(MetaDataMixin.deserialize,
+        return BeforeValidator(partial(cls.deserialize,
                                        base_types=str,
                                        meta_type=cls,
                                        allowed_meta=allowed),
                                json_schema_input_type=str | dict)
 
-    def set_meta(self, **kwds):
-        '''set some/all metadata properties'''
-        props = {_py_to_ser_key(k): v for k, v in kwds.items()}
-        self._check_allowed(props, self._metadata_keys)
-        meta = self.__dict__.setdefault(META_CONTAINER, {})
-        meta |= props
 
-    def get_meta(self, name: str):
-        '''get a metadata property'''
-        return self.__dict__.get(META_CONTAINER, {}).get(_py_to_ser_key(name))
-
-
-class DateWithMeta(date, MetaDataMixin):
+class DateWithMeta(date, BasicTypeMetaDataMixin):
     '''date with metadata'''
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         ymd = date.fromisoformat(value).timetuple()[:3]
@@ -94,7 +98,7 @@ class DateWithMeta(date, MetaDataMixin):
         return obj
 
 
-class TimeWithMeta(time, MetaDataMixin):
+class TimeWithMeta(time, BasicTypeMetaDataMixin):
     '''annotated time'''
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         aux = time.fromisoformat(value)
@@ -109,7 +113,7 @@ class TimeWithMeta(time, MetaDataMixin):
         return obj
 
 
-class DateTimeWithMeta(datetime, MetaDataMixin):
+class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
     '''annotated datetime'''
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         aux = datetime.fromisoformat(value)
@@ -130,7 +134,7 @@ class DateTimeWithMeta(datetime, MetaDataMixin):
         return self.isoformat()
 
 
-class StrWithMeta(str, MetaDataMixin):
+class StrWithMeta(str, BasicTypeMetaDataMixin):
     '''string with metadata'''
     def __new__(cls, value, **kwds):
         obj = str.__new__(cls, value)
@@ -138,7 +142,7 @@ class StrWithMeta(str, MetaDataMixin):
         return obj
 
 
-class IntWithMeta(int, MetaDataMixin):
+class IntWithMeta(int, BasicTypeMetaDataMixin):
     '''annotated integer'''
     def __new__(cls, value, **kwds):
         obj = int.__new__(cls, value)
@@ -149,7 +153,7 @@ class IntWithMeta(int, MetaDataMixin):
     @lru_cache
     def serializer(cls):
         '''should return the validator for the specific class'''
-        ser_fn = partial(MetaDataMixin.serialise, base_type=int)
+        ser_fn = partial(cls.serialise, base_type=int)
         return PlainSerializer(ser_fn, return_type=dict)
 
     @classmethod
@@ -157,14 +161,14 @@ class IntWithMeta(int, MetaDataMixin):
     def validator(cls, allowed_meta: tuple[str]):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
-        return BeforeValidator(partial(MetaDataMixin.deserialize,
+        return BeforeValidator(partial(cls.deserialize,
                                        base_types=int,
                                        meta_type=cls,
                                        allowed_meta=allowed),
                                json_schema_input_type=int | dict)
 
 
-class NumberWithMeta(Decimal, MetaDataMixin):
+class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     '''annotated number'''
     def __new__(cls, value, **kwds):
         obj = Decimal.__new__(cls, value)
@@ -175,7 +179,7 @@ class NumberWithMeta(Decimal, MetaDataMixin):
     @lru_cache
     def serializer(cls):
         '''should return the validator for the specific class'''
-        ser_fn = partial(MetaDataMixin.serialise, base_type=Decimal)
+        ser_fn = partial(cls.serialise, base_type=Decimal)
         return PlainSerializer(ser_fn, return_type=dict)
 
     @classmethod
@@ -183,7 +187,7 @@ class NumberWithMeta(Decimal, MetaDataMixin):
     def validator(cls, allowed_meta: tuple[str]):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
-        return BeforeValidator(partial(MetaDataMixin.deserialize,
+        return BeforeValidator(partial(cls.deserialize,
                                        base_types=(Decimal, float, int, str),
                                        meta_type=cls,
                                        allowed_meta=allowed),
