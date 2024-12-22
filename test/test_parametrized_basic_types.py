@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import Field, ValidationError
 
-from rune.runtime.utils import BaseDataClass
+from rune.runtime.base_data_class import BaseDataClass
 
 
 class NumberWithConstraintsModel(BaseDataClass):

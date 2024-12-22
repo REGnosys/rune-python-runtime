@@ -6,7 +6,7 @@ import pytest
 from typing_extensions import Annotated
 from pydantic import Field, ValidationError
 
-from rune.runtime.utils import BaseDataClass
+from rune.runtime.base_data_class import BaseDataClass
 from rune.runtime.metadata import NumberWithMeta
 from rune.runtime.metadata import DateWithMeta
 from rune.runtime.metadata import DateTimeWithMeta
@@ -16,16 +16,6 @@ from rune.runtime.metadata import StrWithMeta
 
 class AnnotatedStringModel(BaseDataClass):
     '''string test class'''
-    # currency: Annotated[
-    #     StrWithMeta,
-    #     PlainSerializer(partial(MetaDataMixin.serialise, base_type=str),
-    #                     return_type=dict),
-    #     PlainValidator(partial(MetaDataMixin.deserialize,
-    #                            base_types=str,
-    #                            meta_type=StrWithMeta,
-    #                            allowed_meta={'@scheme'}),
-    #                    json_schema_input_type=str | dict)] = Field(
-    #                        ..., description="Test currency")
     currency: Annotated[StrWithMeta,
                         StrWithMeta.serializer(),
                         StrWithMeta.validator(('@scheme',))
@@ -34,16 +24,6 @@ class AnnotatedStringModel(BaseDataClass):
 
 class AnnotatedNumberModel(BaseDataClass):
     '''number test class'''
-    # amount: Annotated[
-    #     NumberWithMeta,
-    #     PlainSerializer(partial(MetaDataMixin.serialise, base_type=Decimal),
-    #                     return_type=dict),
-    #     PlainValidator(partial(MetaDataMixin.deserialize,
-    #                            base_types=(Decimal, float, int, str),
-    #                            meta_type=NumberWithMeta,
-    #                            allowed_meta={'@scheme'}),
-    #                    json_schema_input_type=float | int | str
-    #                    | dict)] = Field(..., description="Test amount")
     amount: Annotated[NumberWithMeta,
                       NumberWithMeta.serializer(),
                       NumberWithMeta.validator(('@scheme',))
@@ -52,16 +32,6 @@ class AnnotatedNumberModel(BaseDataClass):
 
 class AnnotatedDateModel(BaseDataClass):
     '''date test class'''
-    # date: Annotated[
-    #     DateWithMeta,
-    #     PlainSerializer(partial(MetaDataMixin.serialise, base_type=str),
-    #                     return_type=dict),
-    #     PlainValidator(partial(MetaDataMixin.deserialize,
-    #                            base_types=str,
-    #                            meta_type=DateWithMeta,
-    #                            allowed_meta={'@scheme'}),
-    #                    json_schema_input_type=str | dict)] = Field(
-    #                        ..., description="Test date")
     date: Annotated[DateWithMeta,
                     DateWithMeta.serializer(),
                     DateWithMeta.validator(('@scheme',))
@@ -70,16 +40,6 @@ class AnnotatedDateModel(BaseDataClass):
 
 class AnnotatedDateTimeModel(BaseDataClass):
     '''datetime test class'''
-    # datetime: Annotated[
-    #     DateTimeWithMeta,
-    #     PlainSerializer(partial(MetaDataMixin.serialise, base_type=str),
-    #                     return_type=dict),
-    #     PlainValidator(partial(MetaDataMixin.deserialize,
-    #                            base_types=str,
-    #                            meta_type=DateTimeWithMeta,
-    #                            allowed_meta={'@scheme'}),
-    #                    json_schema_input_type=str | dict)] = Field(
-    #                        ..., description="Test datetime")
     datetime: Annotated[DateTimeWithMeta,
                         DateTimeWithMeta.serializer(),
                         DateTimeWithMeta.validator(('@scheme',))
@@ -88,16 +48,6 @@ class AnnotatedDateTimeModel(BaseDataClass):
 
 class AnnotatedTimeModel(BaseDataClass):
     '''datetime test class'''
-    # time: Annotated[
-    #     TimeWithMeta,
-    #     PlainSerializer(partial(MetaDataMixin.serialise, base_type=str),
-    #                     return_type=dict),
-    #     PlainValidator(partial(MetaDataMixin.deserialize,
-    #                            base_types=str,
-    #                            meta_type=TimeWithMeta,
-    #                            allowed_meta={'@scheme'}),
-    #                    json_schema_input_type=str | dict)] = Field(
-    #                        ..., description="Test datetime")
     time: Annotated[TimeWithMeta,
                     TimeWithMeta.serializer(),
                     TimeWithMeta.validator(('@scheme',))
@@ -106,16 +56,6 @@ class AnnotatedTimeModel(BaseDataClass):
 
 class StrWithMetaModel(BaseDataClass):
     '''generic meta support test case'''
-    # currency: Annotated[
-    #     StrWithMeta,
-    #     PlainSerializer(partial(MetaDataMixin.serialise, base_type=str),
-    #                     return_type=dict),
-    #     PlainValidator(partial(MetaDataMixin.deserialize,
-    #                            base_types=str,
-    #                            meta_type=StrWithMeta,
-    #                            allowed_meta={'@scheme', '@key'}),
-    #                    json_schema_input_type=str | dict)] = Field(
-    #                        ..., description="Test currency")
     currency: Annotated[StrWithMeta,
                         StrWithMeta.serializer(),
                         StrWithMeta.validator(('@scheme', '@key'))

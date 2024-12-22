@@ -2,7 +2,7 @@
 from functools import partial, lru_cache
 from decimal import Decimal
 from datetime import date, datetime, time
-from pydantic import PlainSerializer, BeforeValidator
+from pydantic import PlainSerializer, BeforeValidator, PlainValidator
 
 META_CONTAINER = '__rune_metadata'
 
@@ -22,6 +22,8 @@ class BaseMetaDataMixin:
 
     @classmethod
     def _check_allowed(cls, metadata: dict, allowed_meta: set[str]):
+        if not metadata:
+            return
         keys = set(metadata.keys())
         if not keys.issubset(allowed_meta):
             raise ValueError('Not allowed metadata provided: '
@@ -38,6 +40,57 @@ class BaseMetaDataMixin:
         '''get a metadata property'''
         return self.__dict__.get(META_CONTAINER, {}).get(_py_to_ser_key(name))
 
+    @classmethod
+    def serialise_meta(cls, obj, allowed_meta: set[str] | None = None) -> dict:
+        '''used as serialisation method with pydantic'''
+        allowed_meta = allowed_meta or cls._metadata_keys
+        metadata = obj.__dict__.get(META_CONTAINER, {})
+        res = {key: value for key, value in metadata.items() if value}
+        cls._check_allowed(metadata, allowed_meta)
+        return res
+
+
+class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
+    '''metadata support for complex types'''
+    @classmethod
+    def serialise(cls,
+                  obj,
+                  allowed_meta: set[str] | None = None) -> dict:
+        '''used as serialisation method with pydantic'''
+        res = cls.serialise_meta(obj, allowed_meta)
+        res |= obj.model_dump(exclude_unset=True, exclude_defaults=True)
+        return res
+
+    @classmethod
+    def deserialize(cls, obj, allowed_meta: set[str]):
+        '''method used as pydantic `validator`'''
+        if isinstance(obj, cls):
+            metadata = obj.__dict__.get(META_CONTAINER, {})
+            cls._check_allowed(metadata, allowed_meta)
+            return obj
+
+        metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
+        for k in metadata.keys():
+            obj.pop(k)
+        cls._check_allowed(metadata, allowed_meta)
+        model = cls.model_validate(obj)  # type: ignore
+        model.__dict__[META_CONTAINER] = metadata
+        return model
+
+    @classmethod
+    @lru_cache
+    def serializer(cls):
+        '''should return the validator for the specific class'''
+        return PlainSerializer(cls.serialise, return_type=dict)
+
+    @classmethod
+    @lru_cache
+    def validator(cls, allowed_meta: tuple[str]):
+        '''default validator for the specific class'''
+        allowed = set(allowed_meta)
+        return PlainValidator(partial(cls.deserialize, allowed_meta=allowed),
+                              json_schema_input_type=dict)
+
 
 class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     '''holds the metadata associated with an instance'''
@@ -48,27 +101,24 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
                   base_type,
                   allowed_meta: set[str] | None = None) -> dict:
         '''used as serialisation method with pydantic'''
-        allowed_meta = allowed_meta or cls._metadata_keys
-        metadata = obj.__dict__.get(META_CONTAINER, {})
-        res = {key: value for key, value in metadata.items() if value}
-        cls._check_allowed(metadata, allowed_meta)
+        res = cls.serialise_meta(obj, allowed_meta)
         res['@data'] = base_type(obj)
         return res
 
     @classmethod
-    def deserialize(cls, obj, base_types, meta_type, allowed_meta: set[str]):
+    def deserialize(cls, obj, base_types, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
-        if isinstance(obj, meta_type):
+        if isinstance(obj, cls):
             metadata = obj.__dict__.get(META_CONTAINER, {})
             cls._check_allowed(metadata, allowed_meta)
             return obj
         if isinstance(obj, base_types):
-            return meta_type(obj)
+            return cls(obj)  # type: ignore
 
         #FIXME: assuming dict - shall we check?
         data = obj.pop('@data')
         cls._check_allowed(obj, allowed_meta)
-        return meta_type(data, **obj)
+        return cls(data, **obj)  # type: ignore
 
     @classmethod
     @lru_cache
@@ -84,7 +134,6 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
         allowed = set(allowed_meta)
         return BeforeValidator(partial(cls.deserialize,
                                        base_types=str,
-                                       meta_type=cls,
                                        allowed_meta=allowed),
                                json_schema_input_type=str | dict)
 
@@ -163,7 +212,6 @@ class IntWithMeta(int, BasicTypeMetaDataMixin):
         allowed = set(allowed_meta)
         return BeforeValidator(partial(cls.deserialize,
                                        base_types=int,
-                                       meta_type=cls,
                                        allowed_meta=allowed),
                                json_schema_input_type=int | dict)
 
@@ -189,77 +237,7 @@ class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
         allowed = set(allowed_meta)
         return BeforeValidator(partial(cls.deserialize,
                                        base_types=(Decimal, float, int, str),
-                                       meta_type=cls,
                                        allowed_meta=allowed),
                                json_schema_input_type=float | int | str | dict)
-
-
-# _serialise_str_with_scheme = partial(_serialise_with_scheme, base_type=str)
-# _deserialize_str_with_scheme = partial(_deserialize_with_scheme,
-#                                        base_types=str,
-#                                        annotated_type=AnnotatedString)
-
-# _serialise_int_with_scheme = partial(_serialise_with_scheme, base_type=int)
-# _deserialize_int_with_scheme = partial(_deserialize_with_scheme,
-#                                        base_types=int,
-#                                        annotated_type=AnnotatedInt)
-
-# _serialise_number_with_scheme = partial(_serialise_with_scheme,
-#                                         base_type=Decimal)
-# _deserialize_number_with_scheme = partial(_deserialize_with_scheme,
-#                                           base_types=(Decimal, float, int, str),
-#                                           annotated_type=AnnotatedNumber)
-
-# _serialise_date_with_scheme = partial(_serialise_with_scheme, base_type=str)
-# _deserialize_date_with_scheme = partial(_deserialize_with_scheme,
-#                                         base_types=str,
-#                                         annotated_type=AnnotatedDate)
-
-# _serialise_datetime_with_scheme = partial(_serialise_with_scheme, base_type=str)
-# _deserialize_datetime_with_scheme = partial(_deserialize_with_scheme,
-#                                             base_types=str,
-#                                             annotated_type=AnnotatedDateTime)
-
-# _serialise_time_with_scheme = partial(_serialise_with_scheme, base_type=str)
-# _deserialize_time_with_scheme = partial(_deserialize_with_scheme,
-#                                         base_types=str,
-#                                         annotated_type=AnnotatedTime)
-
-
-# AnnotatedStringProperty = Annotated[
-#     AnnotatedString,
-#     PlainSerializer(_serialise_str_with_scheme, return_type=dict),
-#     PlainValidator(_deserialize_str_with_scheme,
-#                    json_schema_input_type=str | dict)]
-
-# AnnotatedIntProperty = Annotated[
-#     AnnotatedInt,
-#     PlainSerializer(_serialise_int_with_scheme, return_type=dict),
-#     PlainValidator(_deserialize_int_with_scheme,
-#                    json_schema_input_type=int | str | dict)]
-
-# AnnotatedNumberProperty = Annotated[
-#     AnnotatedNumber,
-#     PlainSerializer(_serialise_number_with_scheme, return_type=dict),
-#     PlainValidator(_deserialize_number_with_scheme,
-#                    json_schema_input_type=float | int | str | dict)]
-
-# AnnotatedDateProperty = Annotated[
-#     AnnotatedDate,
-#     PlainSerializer(_serialise_date_with_scheme, return_type=dict),
-#     PlainValidator(_deserialize_date_with_scheme,
-#                    json_schema_input_type=str | dict)]
-
-# AnnotatedDateTimeProperty = Annotated[
-#     AnnotatedDate,
-#     PlainSerializer(_serialise_datetime_with_scheme, return_type=dict),
-#     PlainValidator(_deserialize_datetime_with_scheme,
-#                    json_schema_input_type=str | dict)]
-
-# AnnotatedTimeProperty = Annotated[
-#     AnnotatedDate,
-#     PlainSerializer(_serialise_time_with_scheme, return_type=dict),
-#     PlainValidator(_deserialize_time_with_scheme,
-#                    json_schema_input_type=str | dict)]
 
 # EOF
