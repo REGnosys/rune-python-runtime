@@ -1,6 +1,7 @@
 '''Classes representing annotated basic Rune types'''
 from functools import partial, lru_cache
 from decimal import Decimal
+from typing import Any
 from datetime import date, datetime, time
 from pydantic import PlainSerializer, BeforeValidator, PlainValidator
 
@@ -15,49 +16,54 @@ def _py_to_ser_key(key: str) -> str:
 
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
-    _metadata_keys = {
-        '@scheme', '@key', '@ref', '@key:external', '@ref:external',
-        '@key:scoped', '@ref:scoped'
-    }
+    def init_meta(self, allowed_meta: set[str]):
+        ''' if not initialised, just creates empty meta slots. If the metadata
+            container is not empty, it will check if the already present keys
+            are conform to the allowed keys.
+        '''
+        meta = self.__dict__.setdefault(META_CONTAINER, {})
+        current_meta = set(meta.keys())
+        if not current_meta.issubset(allowed_meta):
+            raise ValueError(f'Allowed meta {allowed_meta} differs from the '
+                             f'currently existing meta slots: {current_meta}')
+        meta |= {k: None for k in allowed_meta - current_meta}
 
-    @classmethod
-    def _check_allowed(cls, metadata: dict, allowed_meta: set[str]):
-        if not metadata:
+    def _get_meta_container(self) -> dict[str, Any]:
+        return self.__dict__.get(META_CONTAINER, {})
+
+    def _check_props_allowed(self, props: dict[str, Any]):
+        if not props:
             return
-        keys = set(metadata.keys())
-        if not keys.issubset(allowed_meta):
+        allowed = set(self._get_meta_container().keys())
+        prop_keys = set(props.keys())
+        if not prop_keys.issubset(allowed):
             raise ValueError('Not allowed metadata provided: '
-                             f'{keys - allowed_meta}')
+                             f'{prop_keys - allowed}')
 
-    def set_meta(self, **kwds):
+    def set_meta(self, check_allowed=True, **kwds):
         '''set some/all metadata properties'''
         props = {_py_to_ser_key(k): v for k, v in kwds.items()}
-        self._check_allowed(props, self._metadata_keys)
+        if check_allowed:
+            self._check_props_allowed(props)
         meta = self.__dict__.setdefault(META_CONTAINER, {})
         meta |= props
 
     def get_meta(self, name: str):
         '''get a metadata property'''
-        return self.__dict__.get(META_CONTAINER, {}).get(_py_to_ser_key(name))
+        return self._get_meta_container().get(_py_to_ser_key(name))
 
-    @classmethod
-    def serialise_meta(cls, obj, allowed_meta: set[str] | None = None) -> dict:
+    def serialise_meta(self) -> dict:
         '''used as serialisation method with pydantic'''
-        allowed_meta = allowed_meta or cls._metadata_keys
-        metadata = obj.__dict__.get(META_CONTAINER, {})
-        res = {key: value for key, value in metadata.items() if value}
-        cls._check_allowed(metadata, allowed_meta)
-        return res
+        metadata = self._get_meta_container()
+        return {key: value for key, value in metadata.items() if value}
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
     '''metadata support for complex types'''
     @classmethod
-    def serialise(cls,
-                  obj,
-                  allowed_meta: set[str] | None = None) -> dict:
+    def serialise(cls, obj) -> dict:
         '''used as serialisation method with pydantic'''
-        res = cls.serialise_meta(obj, allowed_meta)
+        res = obj.serialise_meta()
         res |= obj.model_dump(exclude_unset=True, exclude_defaults=True)
         return res
 
@@ -65,16 +71,15 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
     def deserialize(cls, obj, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
         if isinstance(obj, cls):
-            metadata = obj.__dict__.get(META_CONTAINER, {})
-            cls._check_allowed(metadata, allowed_meta)
+            obj.init_meta(allowed_meta)
             return obj
 
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
         for k in metadata.keys():
             obj.pop(k)
-        cls._check_allowed(metadata, allowed_meta)
         model = cls.model_validate(obj)  # type: ignore
         model.__dict__[META_CONTAINER] = metadata
+        model.init_meta(allowed_meta)
         return model
 
     @classmethod
@@ -94,31 +99,23 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
 
 class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     '''holds the metadata associated with an instance'''
-
     @classmethod
-    def serialise(cls,
-                  obj,
-                  base_type,
-                  allowed_meta: set[str] | None = None) -> dict:
+    def serialise(cls, obj, base_type,) -> dict:
         '''used as serialisation method with pydantic'''
-        res = cls.serialise_meta(obj, allowed_meta)
+        res = obj.serialise_meta()
         res['@data'] = base_type(obj)
         return res
 
     @classmethod
     def deserialize(cls, obj, base_types, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
-        if isinstance(obj, cls):
-            metadata = obj.__dict__.get(META_CONTAINER, {})
-            cls._check_allowed(metadata, allowed_meta)
-            return obj
-        if isinstance(obj, base_types):
-            return cls(obj)  # type: ignore
-
-        #FIXME: assuming dict - shall we check?
-        data = obj.pop('@data')
-        cls._check_allowed(obj, allowed_meta)
-        return cls(data, **obj)  # type: ignore
+        if isinstance(obj, base_types) and not isinstance(obj, cls):
+            obj = cls(obj)  # type: ignore
+        elif isinstance(obj, dict):
+            data = obj.pop('@data')
+            obj = cls(data, **obj)  # type: ignore
+        obj.init_meta(allowed_meta)
+        return obj
 
     @classmethod
     @lru_cache
@@ -143,7 +140,7 @@ class DateWithMeta(date, BasicTypeMetaDataMixin):
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         ymd = date.fromisoformat(value).timetuple()[:3]
         obj = date.__new__(cls, *ymd)
-        obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
+        obj.set_meta(check_allowed=False, **kwds)
         return obj
 
 
@@ -158,7 +155,7 @@ class TimeWithMeta(time, BasicTypeMetaDataMixin):
                            aux.microsecond,
                            aux.tzinfo,
                            fold=aux.fold)
-        obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
+        obj.set_meta(check_allowed=False, **kwds)
         return obj
 
 
@@ -176,7 +173,7 @@ class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
                                aux.microsecond,
                                aux.tzinfo,
                                fold=aux.fold)
-        obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
+        obj.set_meta(check_allowed=False, **kwds)
         return obj
 
     def __str__(self):
@@ -187,7 +184,7 @@ class StrWithMeta(str, BasicTypeMetaDataMixin):
     '''string with metadata'''
     def __new__(cls, value, **kwds):
         obj = str.__new__(cls, value)
-        obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
+        obj.set_meta(check_allowed=False, **kwds)
         return obj
 
 
@@ -195,7 +192,7 @@ class IntWithMeta(int, BasicTypeMetaDataMixin):
     '''annotated integer'''
     def __new__(cls, value, **kwds):
         obj = int.__new__(cls, value)
-        obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
+        obj.set_meta(check_allowed=False, **kwds)
         return obj
 
     @classmethod
@@ -220,7 +217,7 @@ class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     '''annotated number'''
     def __new__(cls, value, **kwds):
         obj = Decimal.__new__(cls, value)
-        obj.set_meta(**{_py_to_ser_key(k): v for k, v in kwds.items()})
+        obj.set_meta(check_allowed=False, **kwds)
         return obj
 
     @classmethod

@@ -47,15 +47,14 @@ def test_create_loan_no_meta_exc():
     '''tests the creation of a simple model - no meta'''
     model = DummyLoan(loan=CashFlow(currency='EUR', amount=100),
                       repayment=CashFlow(currency='EUR', amount=101))
-    model.loan.set_meta(key='cf-1-1')  # pylint: disable=no-member
-    json_str = model.model_dump_json(exclude_unset=True)
-    print(json_str)
+    with pytest.raises(ValueError):
+        model.loan.set_meta(key='cf-1-1')  # pylint: disable=no-member
 
 
 def test_create_loan_with_meta():
     '''tests the creation of a simple model with some meta'''
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
-                      repayment=CashFlow(currency='EUR', amount=101))
+                       repayment=CashFlow(currency='EUR', amount=101))
     model.loan.set_meta(key='cf-1-1')  # pylint: disable=no-member
     assert model.loan.get_meta('key') == 'cf-1-1'  # pylint: disable=no-member
 
