@@ -48,7 +48,7 @@ def test_use_ref_from_key():
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
                        repayment=CashFlow(currency='EUR', amount=101))
     key = model.loan.get_or_create_key()  # pylint: disable=no-member
-    model.set_as_reference('repayment', key)
+    model.bind_property_to('repayment', key)
     assert id(model.loan) == id(model.repayment)
 
 
@@ -56,7 +56,7 @@ def test_use_ref_from_object():
     '''test use a ref'''
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
                        repayment=CashFlow(currency='EUR', amount=101))
-    model.set_as_reference('repayment', model.loan)
+    model.bind_property_to('repayment', model.loan)
     assert id(model.loan) == id(model.repayment)
 
 
@@ -66,5 +66,16 @@ def test_bad_key_generation():
                       repayment=CashFlow(currency='EUR', amount=101))
     with pytest.raises(ValueError):
         model.loan.get_or_create_key()  # pylint: disable=no-member
+
+
+def test_invalid_property():
+    '''Attempts to bind a property when not allowed'''
+    model = DummyLoan(loan=CashFlow(currency='EUR', amount=100),
+                      repayment=CashFlow(currency='EUR', amount=101))
+    model2 = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
+                        repayment=CashFlow(currency='EUR', amount=101))
+
+    with pytest.raises(ValueError):
+        model.bind_property_to('repayment', model2.loan)
 
 # EOF

@@ -68,22 +68,30 @@ class BaseMetaDataMixin:
             register_object(self, key)
         return key
 
-    def set_as_reference(self, property_nm: str, target: str | Any):
+    def bind_property_to(self, property_nm: str, target: str | Any):
         '''set the property to reference the object referenced by the key'''
-        # curr_obj = getattr(self, property_nm)
-        field_type = self.__class__.__annotations__.get(property_nm)
         if isinstance(target, BaseMetaDataMixin):
             target_key = target.get_or_create_key()
         else:
             target_key = target
             target = get_object(target_key)
 
-        if not isinstance(target, get_args(field_type)[0]):
+        field_type = self.__class__.__annotations__.get(property_nm)
+        allowed_type = get_args(field_type)
+        allowed_type = allowed_type[0] if allowed_type else field_type
+        if not isinstance(target, allowed_type):
             raise ValueError("Can't set reference. Incompatible types: "
                              f"expected {get_args(field_type)[0]}, "
                              f"got {target.__class__}")
-        setattr(self, property_nm, target)
         refs = self.__dict__.setdefault(REFS_CONTAINER, {})
+        if property_nm not in refs:
+            # not a reference - check if allowed to replace with one
+            old_val = getattr(self, property_nm)
+            if not isinstance(old_val, BaseMetaDataMixin):
+                raise ValueError(f'Property {property_nm} of type '
+                                 f"{type(old_val)} can't be a reference")
+            old_val._check_props_allowed({'@ref': ''})
+        setattr(self, property_nm, target)
         refs[property_nm] = target_key
 
 
