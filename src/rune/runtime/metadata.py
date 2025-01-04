@@ -1,11 +1,14 @@
 '''Classes representing annotated basic Rune types'''
 from functools import partial, lru_cache
+import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, get_args
 from datetime import date, datetime, time
 from pydantic import PlainSerializer, BeforeValidator, PlainValidator
+from rune.runtime.object_registry import register_object, get_object
 
 META_CONTAINER = '__rune_metadata'
+REFS_CONTAINER = '__rune_references'
 
 
 def _py_to_ser_key(key: str) -> str:
@@ -56,6 +59,32 @@ class BaseMetaDataMixin:
         '''used as serialisation method with pydantic'''
         metadata = self._get_meta_container()
         return {key: value for key, value in metadata.items() if value}
+
+    def get_or_create_key(self) -> str:
+        '''gets or creates the key associated with this object'''
+        if not (key := self.get_meta('key')):
+            key = str(uuid.uuid4())
+            self.set_meta(key=key)
+            register_object(self, key)
+        return key
+
+    def set_as_reference(self, property_nm: str, target: str | Any):
+        '''set the property to reference the object referenced by the key'''
+        # curr_obj = getattr(self, property_nm)
+        field_type = self.__class__.__annotations__.get(property_nm)
+        if isinstance(target, BaseMetaDataMixin):
+            target_key = target.get_or_create_key()
+        else:
+            target_key = target
+            target = get_object(target_key)
+
+        if not isinstance(target, get_args(field_type)[0]):
+            raise ValueError("Can't set reference. Incompatible types: "
+                             f"expected {get_args(field_type)[0]}, "
+                             f"got {target.__class__}")
+        setattr(self, property_nm, target)
+        refs = self.__dict__.setdefault(REFS_CONTAINER, {})
+        refs[property_nm] = target_key
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
