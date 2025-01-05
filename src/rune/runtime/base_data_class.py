@@ -1,7 +1,7 @@
 '''Base class for all Rune type classes'''
 import logging
 from typing import get_args, get_origin, Any
-from pydantic import BaseModel, ValidationError, ConfigDict
+from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
 
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
@@ -30,6 +30,16 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             if name in self.__dict__.get(REFS_CONTAINER, {}):
                 self.__dict__[REFS_CONTAINER].pop(name)
             super().__setattr__(name, value)
+
+    @model_serializer(mode='wrap')
+    def resolve_refs(self, serializer, info):
+        '''should replace objects with refs while serializing'''
+        # res = super().model_dump()
+        res = serializer(self, info)
+        refs = self.__dict__.get(REFS_CONTAINER, {})
+        for property_nm, key in refs.items():
+            res[property_nm] = {'@ref': key}
+        return res
 
     def validate_model(self,
                        recursively: bool = True,

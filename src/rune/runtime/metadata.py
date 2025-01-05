@@ -2,7 +2,7 @@
 from functools import partial, lru_cache
 import uuid
 from decimal import Decimal
-from typing import Any, get_args
+from typing import Any, Never, get_args
 from datetime import date, datetime, time
 from pydantic import PlainSerializer, BeforeValidator, PlainValidator
 from rune.runtime.object_registry import register_object, get_object
@@ -136,7 +136,7 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
 
     @classmethod
     @lru_cache
-    def validator(cls, allowed_meta: tuple[str]):
+    def validator(cls, allowed_meta: tuple[str] | tuple[Never, ...] = tuple()):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
         return PlainValidator(partial(cls.deserialize, allowed_meta=allowed),

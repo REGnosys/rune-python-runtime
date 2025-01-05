@@ -66,6 +66,12 @@ class DummyTradeParties(BaseDataClass):
                                                description="cpty2")
 
 
+class DummyBiLoan(BaseDataClass):
+    '''more complex model'''
+    loan1: DummyLoan2
+    loan2: DummyLoan2
+
+
 def test_key_generation():
     '''generate a key for an object'''
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
@@ -151,5 +157,30 @@ def test_basic_str_ref_assign():
     model.party2 = Reference(model.party1)
     assert id(model.party1) == id(model.party2)
 
+
+def test_dump_key_ref():
+    '''test dump a ref'''
+    model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
+                       repayment=CashFlow(currency='EUR', amount=101))
+    model.repayment = Reference(model.loan)
+    dict_ = model.model_dump(exclude_unset=True)
+    assert dict_['loan']['@key'] == dict_['repayment']['@ref']
+    assert len(dict_['repayment']) == 1
+
+
+def test_dump_key_ref_2():
+    '''test dump a ref'''
+    model = DummyBiLoan(loan1=DummyLoan2(loan=CashFlow(currency='EUR',
+                                                       amount=100),
+                                         repayment=CashFlow(currency='EUR',
+                                                            amount=101)),
+                        loan2=DummyLoan2(loan=CashFlow(currency='EUR',
+                                                       amount=100),
+                                         repayment=CashFlow(currency='EUR',
+                                                            amount=101)))
+    model.loan1.repayment = Reference(model.loan1.loan)
+    dict_ = model.model_dump(exclude_unset=True)
+    assert dict_['loan1']['loan']['@key'] == dict_['loan1']['repayment']['@ref']
+    assert len(dict_['loan1']['repayment']) == 1
 
 # EOF
