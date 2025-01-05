@@ -17,20 +17,19 @@ def _py_to_ser_key(key: str) -> str:
     return '@' + key.replace('_', ':')
 
 
+class Reference:
+    '''manages a reference to a object with a key'''
+    def __init__(self, target: str | Any):
+        if isinstance(target, BaseMetaDataMixin):
+            self.target = target
+            self.target_key = target.get_or_create_key()
+        else:
+            self.target_key = target
+            self.target = get_object(self.target_key)  # type: ignore
+
+
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
-    def init_meta(self, allowed_meta: set[str]):
-        ''' if not initialised, just creates empty meta slots. If the metadata
-            container is not empty, it will check if the already present keys
-            are conform to the allowed keys.
-        '''
-        meta = self.__dict__.setdefault(META_CONTAINER, {})
-        current_meta = set(meta.keys())
-        if not current_meta.issubset(allowed_meta):
-            raise ValueError(f'Allowed meta {allowed_meta} differs from the '
-                             f'currently existing meta slots: {current_meta}')
-        meta |= {k: None for k in allowed_meta - current_meta}
-
     def _get_meta_container(self) -> dict[str, Any]:
         return self.__dict__.get(META_CONTAINER, {})
 
@@ -42,6 +41,18 @@ class BaseMetaDataMixin:
         if not prop_keys.issubset(allowed):
             raise ValueError('Not allowed metadata provided: '
                              f'{prop_keys - allowed}')
+
+    def init_meta(self, allowed_meta: set[str]):
+        ''' if not initialised, just creates empty meta slots. If the metadata
+            container is not empty, it will check if the already present keys
+            are conform to the allowed keys.
+        '''
+        meta = self.__dict__.setdefault(META_CONTAINER, {})
+        current_meta = set(meta.keys())
+        if not current_meta.issubset(allowed_meta):
+            raise ValueError(f'Allowed meta {allowed_meta} differs from the '
+                             f'currently existing meta slots: {current_meta}')
+        meta |= {k: None for k in allowed_meta - current_meta}
 
     def set_meta(self, check_allowed=True, **kwds):
         '''set some/all metadata properties'''
@@ -68,21 +79,18 @@ class BaseMetaDataMixin:
             register_object(self, key)
         return key
 
-    def bind_property_to(self, property_nm: str, target: str | Any):
+    def bind_property_to(self, property_nm: str, ref: str | Any):
         '''set the property to reference the object referenced by the key'''
-        if isinstance(target, BaseMetaDataMixin):
-            target_key = target.get_or_create_key()
-        else:
-            target_key = target
-            target = get_object(target_key)
+        if not isinstance(ref, Reference):
+            ref = Reference(ref)
 
         field_type = self.__class__.__annotations__.get(property_nm)
         allowed_type = get_args(field_type)
         allowed_type = allowed_type[0] if allowed_type else field_type
-        if not isinstance(target, allowed_type):
+        if not isinstance(ref.target, allowed_type):
             raise ValueError("Can't set reference. Incompatible types: "
                              f"expected {get_args(field_type)[0]}, "
-                             f"got {target.__class__}")
+                             f"got {ref.target.__class__}")
         refs = self.__dict__.setdefault(REFS_CONTAINER, {})
         if property_nm not in refs:
             # not a reference - check if allowed to replace with one
@@ -90,9 +98,10 @@ class BaseMetaDataMixin:
             if not isinstance(old_val, BaseMetaDataMixin):
                 raise ValueError(f'Property {property_nm} of type '
                                  f"{type(old_val)} can't be a reference")
+            # pylint: disable=protected-access
             old_val._check_props_allowed({'@ref': ''})
-        setattr(self, property_nm, target)
-        refs[property_nm] = target_key
+        setattr(self, property_nm, ref.target)
+        refs[property_nm] = ref.target_key
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):

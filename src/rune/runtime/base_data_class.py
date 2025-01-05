@@ -1,11 +1,12 @@
 '''Base class for all Rune type classes'''
 import logging
-from typing import get_args, get_origin
+from typing import get_args, get_origin, Any
 from pydantic import BaseModel, ValidationError, ConfigDict
 
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
-from rune.runtime.metadata import ComplexTypeMetaDataMixin
+from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
+                                   REFS_CONTAINER)
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -21,6 +22,14 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     model_config = ConfigDict(extra='forbid',
                               revalidate_instances='always',
                               arbitrary_types_allowed=True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if isinstance(value, Reference):
+            self.bind_property_to(name, value)
+        else:
+            if name in self.__dict__.get(REFS_CONTAINER, {}):
+                self.__dict__[REFS_CONTAINER].pop(name)
+            super().__setattr__(name, value)
 
     def validate_model(self,
                        recursively: bool = True,
