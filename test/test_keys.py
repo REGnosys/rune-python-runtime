@@ -6,6 +6,7 @@ from pydantic import Field
 
 from rune.runtime.base_data_class import BaseDataClass
 from rune.runtime.metadata import Reference
+from rune.runtime.metadata import NumberWithMeta, StrWithMeta
 
 
 class CashFlow(BaseDataClass):
@@ -34,6 +35,35 @@ class DummyLoan2(BaseDataClass):
                          CashFlow.validator(
                              allowed_meta=('@key', '@ref'))] = Field(
                                  ..., description='repaid amount')
+
+
+class DummyLoan3(BaseDataClass):
+    '''number test class'''
+    loan: Annotated[NumberWithMeta,
+                    NumberWithMeta.serializer(),
+                    NumberWithMeta.validator(
+                        ('@key', ))] = Field(...,
+                                             description="Test amount",
+                                             decimal_places=3)
+    repayment: Annotated[NumberWithMeta,
+                         NumberWithMeta.serializer(),
+                         NumberWithMeta.validator(
+                             ('@ref', ))] = Field(...,
+                                                  description="Test amount",
+                                                  decimal_places=3)
+
+
+class DummyTradeParties(BaseDataClass):
+    '''number test class'''
+    party1: Annotated[StrWithMeta,
+                      StrWithMeta.serializer(),
+                      StrWithMeta.validator(
+                          ('@key', ))] = Field(..., description="cpty1")
+    party2: Annotated[StrWithMeta,
+                      StrWithMeta.serializer(),
+                      StrWithMeta.validator(
+                          ('@ref', ))] = Field(...,
+                                               description="cpty2")
 
 
 def test_key_generation():
@@ -98,5 +128,28 @@ def test_ref_re_assign():
     model.repayment = old_cf
     assert 'repayment' not in model.__dict__['__rune_references']
     assert id(model.repayment) == id(old_cf)
+
+
+def test_init_ref_assign():
+    '''test use a ref'''
+    loan = CashFlow(currency='EUR', amount=100)
+    # repayment = Reference(loan, True)
+    model = DummyLoan2(loan=loan, repayment=loan)
+    assert id(model.loan) == id(model.repayment)
+
+
+def test_basic_ref_assign():
+    '''test use a ref'''
+    model = DummyLoan3(loan=100, repayment=101)
+    model.repayment = Reference(model.loan)
+    assert id(model.loan) == id(model.repayment)
+
+
+def test_basic_str_ref_assign():
+    '''test use a ref'''
+    model = DummyTradeParties(party1='p1', party2='p2')
+    model.party2 = Reference(model.party1)
+    assert id(model.party1) == id(model.party2)
+
 
 # EOF
