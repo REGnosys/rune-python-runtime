@@ -32,13 +32,13 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             super().__setattr__(name, value)
 
     @model_serializer(mode='wrap')
-    def resolve_refs(self, serializer, info):
+    def _resolve_refs(self, serializer, info):
         '''should replace objects with refs while serializing'''
         # res = super().model_dump()
         res = serializer(self, info)
         refs = self.__dict__.get(REFS_CONTAINER, {})
-        for property_nm, key in refs.items():
-            res[property_nm] = {'@ref': key}
+        for property_nm, (key, ref_type) in refs.items():
+            res[property_nm] = {ref_type: key}
         return res
 
     def validate_model(self,

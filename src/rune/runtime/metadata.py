@@ -19,13 +19,22 @@ def _py_to_ser_key(key: str) -> str:
 
 class Reference:
     '''manages a reference to a object with a key'''
-    def __init__(self, target: str | Any):
-        if isinstance(target, BaseMetaDataMixin):
+    def __init__(self, target: str | Any, ext_key: str | None = None):
+        if not isinstance(target, BaseMetaDataMixin) and ext_key:
+            raise ValueError('Need to pass an object as target when specifying '
+                             'an external key!')
+        if ext_key:
+            target.set_external_key(ext_key)  # type: ignore
+            self.target = target
+            self.target_key = ext_key
+            self.ref_type = '@ref:external'
+        elif isinstance(target, BaseMetaDataMixin):
             self.target = target
             self.target_key = target.get_or_create_key()
+            self.ref_type = '@ref'
         else:
             self.target_key = target
-            self.target = get_object(self.target_key)  # type: ignore
+            self.target, self.ref_type = get_object(self.target_key)
 
 
 class BaseMetaDataMixin:
@@ -76,8 +85,28 @@ class BaseMetaDataMixin:
         if not (key := self.get_meta('key')):
             key = str(uuid.uuid4())
             self.set_meta(key=key)
-            register_object(self, key)
+            try:
+                register_object((self, '@ref'), key)
+            except:
+                self.set_meta(key=None)
+                raise
         return key
+
+    def set_external_key(self, key: str):
+        '''registers this object under the provided external key'''
+        aux = self.get_meta('key_external')
+        if aux and aux != key:
+            raise ValueError(f'This object already has an external key {aux}!'
+                             f'Can\'t change it to {key}')
+        if aux == key:
+            return
+
+        self.set_meta(key_external=key)
+        try:
+            register_object((self, '@ref:external'), key)
+        except:
+            self.set_meta(key_external=None)
+            raise
 
     def bind_property_to(self, property_nm: str, ref: str | Any):
         '''set the property to reference the object referenced by the key'''
@@ -99,9 +128,9 @@ class BaseMetaDataMixin:
                 raise ValueError(f'Property {property_nm} of type '
                                  f"{type(old_val)} can't be a reference")
             # pylint: disable=protected-access
-            old_val._check_props_allowed({'@ref': ''})
+            old_val._check_props_allowed({ref.ref_type: ''})
         setattr(self, property_nm, ref.target)
-        refs[property_nm] = ref.target_key
+        refs[property_nm] = (ref.target_key, ref.ref_type)
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):

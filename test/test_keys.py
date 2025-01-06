@@ -28,13 +28,17 @@ class DummyLoan2(BaseDataClass):
     '''some more complex data structure'''
     loan: Annotated[CashFlow,
                     CashFlow.serializer(),
-                    CashFlow.validator(allowed_meta=('@key', '@ref'))] = Field(
-                        ..., description='loaned amount')
+                    CashFlow.validator(
+                        allowed_meta=('@key', '@key:external', '@ref:external',
+                                      '@ref'))] = Field(
+                                          ..., description='loaned amount')
     repayment: Annotated[CashFlow,
                          CashFlow.serializer(),
                          CashFlow.validator(
-                             allowed_meta=('@key', '@ref'))] = Field(
-                                 ..., description='repaid amount')
+                             allowed_meta=('@key', '@key:external',
+                                           '@ref:external', '@ref'))] = Field(
+                                               ...,
+                                               description='repaid amount')
 
 
 class DummyLoan3(BaseDataClass):
@@ -42,13 +46,13 @@ class DummyLoan3(BaseDataClass):
     loan: Annotated[NumberWithMeta,
                     NumberWithMeta.serializer(),
                     NumberWithMeta.validator(
-                        ('@key', ))] = Field(...,
+                        ('@key', '@key:external'))] = Field(...,
                                              description="Test amount",
                                              decimal_places=3)
     repayment: Annotated[NumberWithMeta,
                          NumberWithMeta.serializer(),
                          NumberWithMeta.validator(
-                             ('@ref', ))] = Field(...,
+                             ('@ref', '@ref:external'))] = Field(...,
                                                   description="Test amount",
                                                   decimal_places=3)
 
@@ -58,12 +62,13 @@ class DummyTradeParties(BaseDataClass):
     party1: Annotated[StrWithMeta,
                       StrWithMeta.serializer(),
                       StrWithMeta.validator(
-                          ('@key', ))] = Field(..., description="cpty1")
+                          ('@key',
+                           '@key:external'))] = Field(..., description="cpty1")
     party2: Annotated[StrWithMeta,
                       StrWithMeta.serializer(),
                       StrWithMeta.validator(
-                          ('@ref', ))] = Field(...,
-                                               description="cpty2")
+                          ('@ref',
+                           '@ref:external'))] = Field(..., description="cpty2")
 
 
 class DummyBiLoan(BaseDataClass):
@@ -136,6 +141,23 @@ def test_ref_re_assign():
     assert id(model.repayment) == id(old_cf)
 
 
+def test_ref_ext_assign():
+    '''test use a ext key and ref'''
+    model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
+                       repayment=CashFlow(currency='EUR', amount=101))
+    model.repayment = Reference(model.loan, 'ext_key1')
+    assert id(model.loan) == id(model.repayment)
+
+
+def test_ref_ext_assign_2():
+    '''test use a ext key and ref'''
+    model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
+                       repayment=CashFlow(currency='EUR', amount=101))
+    model.loan.set_external_key('ext_key3') # pylint: disable=no-member
+    model.repayment = Reference('ext_key3')
+    assert id(model.loan) == id(model.repayment)
+
+
 def test_init_ref_assign():
     '''test use a ref'''
     loan = CashFlow(currency='EUR', amount=100)
@@ -166,6 +188,15 @@ def test_dump_key_ref():
     dict_ = model.model_dump(exclude_unset=True)
     assert dict_['loan']['@key'] == dict_['repayment']['@ref']
     assert len(dict_['repayment']) == 1
+
+
+def test_dump_ref_ext():
+    '''test use a ext key and ref'''
+    model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
+                       repayment=CashFlow(currency='EUR', amount=101))
+    model.repayment = Reference(model.loan, 'ext_key2')
+    dict_ = model.model_dump(exclude_unset=True)
+    assert dict_['loan']['@key:external'] == dict_['repayment']['@ref:external']
 
 
 def test_dump_key_ref_2():
