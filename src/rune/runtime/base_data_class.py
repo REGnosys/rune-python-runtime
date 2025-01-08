@@ -5,10 +5,8 @@ from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
 
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
-from rune.runtime.metadata import (ComplexTypeMetaDataMixin,
-                                   BasicTypeMetaDataMixin, Reference,
-                                   REFS_CONTAINER, UnresolvedReference,
-                                   TEMP_UNRESOLVED_REF)
+from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
+                                   REFS_CONTAINER, UnresolvedReference)
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -21,7 +19,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         but is left to the user to determine when to check the validity of the
         cdm model.
     '''
-    model_config = ConfigDict(extra='forbid',
+    model_config = ConfigDict(extra='ignore',
                               revalidate_instances='always',
                               arbitrary_types_allowed=True)
 
@@ -50,10 +48,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                 obj.resolve_references()
             elif isinstance(obj, UnresolvedReference):
                 refs.append((prop_nm, obj.get_reference()))
-            elif (isinstance(obj, BasicTypeMetaDataMixin)
-                  and TEMP_UNRESOLVED_REF in obj.__dict__):
-                ref = obj.__dict__[TEMP_UNRESOLVED_REF].get_reference()
-                refs.append((prop_nm, ref))
 
         for prop_nm, ref in refs:
             self.bind_property_to(prop_nm, ref)
@@ -69,9 +63,14 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             thrown if a validation or condition is violated or if a list with
             all encountered violations should be returned instead.
         '''
-        att_errors = self.validate_attribs(raise_exc=raise_exc, strict=strict)
-        return att_errors + self.validate_conditions(recursively=recursively,
-                                                     raise_exc=raise_exc)
+        try:
+            self.disable_meta_checks()
+            att_errors = self.validate_attribs(raise_exc=raise_exc,
+                                               strict=strict)
+            return att_errors + self.validate_conditions(
+                recursively=recursively, raise_exc=raise_exc)
+        finally:
+            self.enable_meta_checks()
 
     def validate_attribs(self,
                          raise_exc: bool = True,

@@ -2,7 +2,7 @@
 from decimal import Decimal
 from typing_extensions import Annotated
 import pytest
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from rune.runtime.base_data_class import BaseDataClass
 from rune.runtime.metadata import Reference
@@ -256,11 +256,24 @@ def test_load_basic_type_loan_with_key_ref():
 def test_load_basic_type_loan_with_key_ref_and_constraints():
     '''test load a simple model with json with some meta'''
     json_str = '''{
-        "loan": {"@key":"8e50b68b-6426-44a8-bbfd-cbe3b833131c","@data":"100"},
-        "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131c"}
+        "loan": {"@key":"8e50b68b-6426-44a8-bbfd-cbe3b833131a","@data":"100"},
+        "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131a"}
     }'''
     model = DummyLoan4.model_validate_json(json_str)
     model.resolve_references()
+    model.validate_model()
     assert id(model.loan) == id(model.repayment)
+
+
+def test_load_basic_type_loan_with_key_ref_and_broken_constraints():
+    '''test load a simple model with json with some meta'''
+    json_str = '''{
+        "loan": {"@key":"8e50b68b-6426-44a8-bbfd-cbe3b833131b","@data":"-100"},
+        "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131b"}
+    }'''
+    model = DummyLoan4.model_validate_json(json_str)
+    model.resolve_references()
+    with pytest.raises(ValidationError):
+        model.validate_model()
 
 # EOF

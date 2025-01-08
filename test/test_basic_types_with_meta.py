@@ -71,6 +71,14 @@ class StrWithMetaAndConstraintsModel(BaseDataClass):
               min_length=3, max_length=5, pattern=r'^[A-Z]*$')
 
 
+class ConstrainedNumberModel(BaseDataClass):
+    '''number test class'''
+    amount: Annotated[NumberWithMeta,
+                      NumberWithMeta.serializer(),
+                      NumberWithMeta.validator(('@scheme',))
+    ] = Field(..., description="Test amount", decimal_places=3, ge=0)
+
+
 def test_dump_annotated_string_simple():
     '''test the annotated string'''
     model = AnnotatedStringModel(currency='EUR')
@@ -299,5 +307,11 @@ def test_fail_pattern_create_constrained_str_model():
     '''test the creation of the constrained str model'''
     with pytest.raises(ValidationError):
         StrWithMetaAndConstraintsModel(currency='EUR1')
+
+
+def test_fail_create_constrained_num_model():
+    '''test the creation of the constrained str model'''
+    with pytest.raises(ValidationError):
+        ConstrainedNumberModel(amount=NumberWithMeta(-1))
 
 # EOF

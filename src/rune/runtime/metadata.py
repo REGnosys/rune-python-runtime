@@ -4,12 +4,11 @@ import uuid
 from decimal import Decimal
 from typing import Any, Never, get_args
 from datetime import date, datetime, time
-from pydantic import PlainSerializer, BeforeValidator, PlainValidator
+from pydantic import PlainSerializer, PlainValidator, WrapValidator
 from rune.runtime.object_registry import register_object, get_object
 
 META_CONTAINER = '__rune_metadata'
 REFS_CONTAINER = '__rune_references'
-TEMP_UNRESOLVED_REF = '__rune_unresolved_ref'
 
 
 def _py_to_ser_key(key: str) -> str:
@@ -50,6 +49,23 @@ class UnresolvedReference:
 
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
+    __meta_check_disabled = False
+
+    @classmethod
+    def enable_meta_checks(cls):
+        '''enables the metadata checks in deserialize'''
+        BaseMetaDataMixin.__meta_check_disabled = False
+
+    @classmethod
+    def disable_meta_checks(cls):
+        '''disables the metadata checks in deserialize'''
+        BaseMetaDataMixin.__meta_check_disabled = True
+
+    @classmethod
+    def meta_checks_enabled(cls):
+        '''is metadata checked during deserialize'''
+        return not BaseMetaDataMixin.__meta_check_disabled
+
     def _get_meta_container(self) -> dict[str, Any]:
         return self.__dict__.get(META_CONTAINER, {})
 
@@ -188,7 +204,8 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
             obj.pop(k)
         model = cls.model_validate(obj)  # type: ignore
         model.__dict__[META_CONTAINER] = metadata
-        model.init_meta(allowed_meta)
+        if cls.meta_checks_enabled():
+            model.init_meta(allowed_meta)
 
         # Keys deserialization treatment
         model._register_keys(metadata)  # pylint: disable=protected-access
@@ -219,21 +236,20 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
         return res
 
     @classmethod
-    def deserialize(cls, obj, base_types, allowed_meta: set[str]):
+    def deserialize(cls, obj, handler, base_types, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
         model = obj
         if isinstance(obj, base_types) and not isinstance(obj, cls):
             model = cls(obj)  # type: ignore
         elif isinstance(obj, dict):
-            if aux := cls._create_unresolved_ref(obj):
-                model = cls(cls.DEFAULT_VAL)  # type: ignore
-                model.__dict__[TEMP_UNRESOLVED_REF] = aux
-            else:
-                data = obj.pop('@data')
-                model = cls(data, **obj)  # type: ignore
-                model._register_keys(obj)
-        model.init_meta(allowed_meta)
-        return model
+            if ref := cls._create_unresolved_ref(obj):
+                return ref
+            data = obj.pop('@data')
+            model = cls(data, **obj)  # type: ignore
+            model._register_keys(obj)
+        if cls.meta_checks_enabled():
+            model.init_meta(allowed_meta)
+        return handler(model)
 
     @classmethod
     @lru_cache
@@ -247,16 +263,14 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     def validator(cls, allowed_meta: tuple[str]):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
-        return BeforeValidator(partial(cls.deserialize,
-                                       base_types=str,
-                                       allowed_meta=allowed),
-                               json_schema_input_type=str | dict)
+        return WrapValidator(partial(cls.deserialize,
+                                     base_types=str,
+                                     allowed_meta=allowed),
+                             json_schema_input_type=str | dict)
 
 
 class DateWithMeta(date, BasicTypeMetaDataMixin):
     '''date with metadata'''
-    DEFAULT_VAL = '1000-01-01'
-
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         ymd = date.fromisoformat(value).timetuple()[:3]
         obj = date.__new__(cls, *ymd)
@@ -266,8 +280,6 @@ class DateWithMeta(date, BasicTypeMetaDataMixin):
 
 class TimeWithMeta(time, BasicTypeMetaDataMixin):
     '''annotated time'''
-    DEFAULT_VAL = '00:00:00'
-
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         aux = time.fromisoformat(value)
         obj = time.__new__(cls,
@@ -283,8 +295,6 @@ class TimeWithMeta(time, BasicTypeMetaDataMixin):
 
 class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
     '''annotated datetime'''
-    DEFAULT_VAL = '1000-01-01T00:00:00'
-
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         aux = datetime.fromisoformat(value)
         obj = datetime.__new__(cls,
@@ -306,8 +316,6 @@ class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
 
 class StrWithMeta(str, BasicTypeMetaDataMixin):
     '''string with metadata'''
-    DEFAULT_VAL = ''
-
     def __new__(cls, value, **kwds):
         obj = str.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
@@ -316,8 +324,6 @@ class StrWithMeta(str, BasicTypeMetaDataMixin):
 
 class IntWithMeta(int, BasicTypeMetaDataMixin):
     '''annotated integer'''
-    DEFAULT_VAL = 0
-
     def __new__(cls, value, **kwds):
         obj = int.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
@@ -335,16 +341,14 @@ class IntWithMeta(int, BasicTypeMetaDataMixin):
     def validator(cls, allowed_meta: tuple[str]):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
-        return BeforeValidator(partial(cls.deserialize,
-                                       base_types=int,
-                                       allowed_meta=allowed),
-                               json_schema_input_type=int | dict)
+        return WrapValidator(partial(cls.deserialize,
+                                     base_types=int,
+                                     allowed_meta=allowed),
+                             json_schema_input_type=int | dict)
 
 
 class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     '''annotated number'''
-    DEFAULT_VAL = 0
-
     def __new__(cls, value, **kwds):
         obj = Decimal.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
@@ -362,9 +366,9 @@ class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     def validator(cls, allowed_meta: tuple[str]):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
-        return BeforeValidator(partial(cls.deserialize,
-                                       base_types=(Decimal, float, int, str),
-                                       allowed_meta=allowed),
-                               json_schema_input_type=float | int | str | dict)
+        return WrapValidator(partial(cls.deserialize,
+                                     base_types=(Decimal, float, int, str),
+                                     allowed_meta=allowed),
+                             json_schema_input_type=float | int | str | dict)
 
 # EOF
