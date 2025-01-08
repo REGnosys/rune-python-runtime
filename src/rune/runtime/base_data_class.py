@@ -5,8 +5,10 @@ from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
 
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
-from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
-                                   REFS_CONTAINER, UnresolvedReference)
+from rune.runtime.metadata import (ComplexTypeMetaDataMixin,
+                                   BasicTypeMetaDataMixin, Reference,
+                                   REFS_CONTAINER, UnresolvedReference,
+                                   TEMP_UNRESOLVED_REF)
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -34,28 +36,27 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     @model_serializer(mode='wrap')
     def _resolve_refs(self, serializer, info):
         '''should replace objects with refs while serializing'''
-        # res = super().model_dump()
         res = serializer(self, info)
         refs = self.__dict__.get(REFS_CONTAINER, {})
         for property_nm, (key, ref_type) in refs.items():
             res[property_nm] = {ref_type: key}
         return res
 
-    def _build_refs_list(self):
+    def resolve_references(self):
+        '''resolves all attributes which are references'''
         refs = []
         for prop_nm, obj in self.__dict__.items():
             if isinstance(obj, BaseDataClass):
-                # pylint: disable=protected-access
-                refs.extend(obj._build_refs_list())
+                obj.resolve_references()
             elif isinstance(obj, UnresolvedReference):
-                refs.append((prop_nm, obj))
-        return refs
+                refs.append((prop_nm, obj.get_reference()))
+            elif (isinstance(obj, BasicTypeMetaDataMixin)
+                  and TEMP_UNRESOLVED_REF in obj.__dict__):
+                ref = obj.__dict__[TEMP_UNRESOLVED_REF].get_reference()
+                refs.append((prop_nm, ref))
 
-    def resolve_references(self):
-        '''resolves all attributes which are references'''
-        refs = self._build_refs_list()
         for prop_nm, ref in refs:
-            self.bind_property_to(prop_nm, ref.get_reference())
+            self.bind_property_to(prop_nm, ref)
 
     def validate_model(self,
                        recursively: bool = True,

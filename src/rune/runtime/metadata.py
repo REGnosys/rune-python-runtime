@@ -9,6 +9,7 @@ from rune.runtime.object_registry import register_object, get_object
 
 META_CONTAINER = '__rune_metadata'
 REFS_CONTAINER = '__rune_references'
+TEMP_UNRESOLVED_REF = '__rune_unresolved_ref'
 
 
 def _py_to_ser_key(key: str) -> str:
@@ -144,6 +145,21 @@ class BaseMetaDataMixin:
         setattr(self, property_nm, ref.target)
         refs[property_nm] = (ref.target_key, ref.ref_type)
 
+    def _register_keys(self, metadata):
+        keys = {k: v for k, v in metadata.items() if k.startswith('@key') and v}
+        for key_t, key_v in keys.items():
+            key_desc = key_t.split(':')
+            ref_desc = ':' + key_desc[-1] if len(key_desc) > 1 else ''
+            register_object((self, '@ref' + ref_desc), key_v)
+
+    @classmethod
+    def _create_unresolved_ref(cls, metadata) -> UnresolvedReference | None:
+        if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
+            if len(ref) != 1:
+                raise ValueError(f'Multiple references found: {ref}!')
+            return UnresolvedReference(ref)
+        return None
+
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
     '''metadata support for complex types'''
@@ -164,10 +180,8 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
 
         # References deserialization treatment
-        if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
-            if len(ref) != 1:
-                raise ValueError(f'Multiple references found: {ref}!')
-            return UnresolvedReference(ref)
+        if aux := cls._create_unresolved_ref(metadata):
+            return aux
 
         # Model creation
         for k in metadata.keys():
@@ -177,13 +191,7 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         model.init_meta(allowed_meta)
 
         # Keys deserialization treatment
-        keys = {k: v for k, v in metadata.items() if k.startswith('@key') and v}
-        if keys:
-            for key_t, key_v in keys.items():
-                key_desc = key_t.split(':')
-                ref_desc = ':' + key_desc[-1] if len(key_desc) > 1 else ''
-                register_object((model, '@ref' + ref_desc), key_v)
-
+        model._register_keys(metadata)  # pylint: disable=protected-access
         return model
 
     @classmethod
@@ -213,13 +221,19 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     @classmethod
     def deserialize(cls, obj, base_types, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
+        model = obj
         if isinstance(obj, base_types) and not isinstance(obj, cls):
-            obj = cls(obj)  # type: ignore
+            model = cls(obj)  # type: ignore
         elif isinstance(obj, dict):
-            data = obj.pop('@data')
-            obj = cls(data, **obj)  # type: ignore
-        obj.init_meta(allowed_meta)
-        return obj
+            if aux := cls._create_unresolved_ref(obj):
+                model = cls(cls.DEFAULT_VAL)  # type: ignore
+                model.__dict__[TEMP_UNRESOLVED_REF] = aux
+            else:
+                data = obj.pop('@data')
+                model = cls(data, **obj)  # type: ignore
+                model._register_keys(obj)
+        model.init_meta(allowed_meta)
+        return model
 
     @classmethod
     @lru_cache
@@ -241,6 +255,8 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
 
 class DateWithMeta(date, BasicTypeMetaDataMixin):
     '''date with metadata'''
+    DEFAULT_VAL = '1000-01-01'
+
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         ymd = date.fromisoformat(value).timetuple()[:3]
         obj = date.__new__(cls, *ymd)
@@ -250,6 +266,8 @@ class DateWithMeta(date, BasicTypeMetaDataMixin):
 
 class TimeWithMeta(time, BasicTypeMetaDataMixin):
     '''annotated time'''
+    DEFAULT_VAL = '00:00:00'
+
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         aux = time.fromisoformat(value)
         obj = time.__new__(cls,
@@ -265,6 +283,8 @@ class TimeWithMeta(time, BasicTypeMetaDataMixin):
 
 class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
     '''annotated datetime'''
+    DEFAULT_VAL = '1000-01-01T00:00:00'
+
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
         aux = datetime.fromisoformat(value)
         obj = datetime.__new__(cls,
@@ -286,6 +306,8 @@ class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
 
 class StrWithMeta(str, BasicTypeMetaDataMixin):
     '''string with metadata'''
+    DEFAULT_VAL = ''
+
     def __new__(cls, value, **kwds):
         obj = str.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
@@ -294,6 +316,8 @@ class StrWithMeta(str, BasicTypeMetaDataMixin):
 
 class IntWithMeta(int, BasicTypeMetaDataMixin):
     '''annotated integer'''
+    DEFAULT_VAL = 0
+
     def __new__(cls, value, **kwds):
         obj = int.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
@@ -319,6 +343,8 @@ class IntWithMeta(int, BasicTypeMetaDataMixin):
 
 class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     '''annotated number'''
+    DEFAULT_VAL = 0
+
     def __new__(cls, value, **kwds):
         obj = Decimal.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)

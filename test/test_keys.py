@@ -57,6 +57,22 @@ class DummyLoan3(BaseDataClass):
                                                   decimal_places=3)
 
 
+class DummyLoan4(BaseDataClass):
+    '''number test class'''
+    loan: Annotated[NumberWithMeta,
+                    NumberWithMeta.serializer(),
+                    NumberWithMeta.validator(
+                        ('@key', '@key:external'))] = Field(...,
+                                             description="Test amount",
+                                             decimal_places=3)
+    repayment: Annotated[NumberWithMeta,
+                         NumberWithMeta.serializer(),
+                         NumberWithMeta.validator(
+                             ('@ref', '@ref:external'))] = Field(...,
+                                                  description="Test amount",
+                                                  decimal_places=3, gt=0)
+
+
 class DummyTradeParties(BaseDataClass):
     '''number test class'''
     party1: Annotated[StrWithMeta,
@@ -217,11 +233,34 @@ def test_dump_key_ref_2():
 
 def test_load_loan_with_key_ref():
     '''test load a simple model with json with some meta'''
-    json_str = ('{"loan":{"@key":"cf-1-1","currency":"EUR","amount":"100"},'
-                '"repayment":{"@ref":"cf-1-1"}}')
+    json_str = '''{
+        "loan":{"@key":"cf-1-2","currency":"EUR","amount":"100"},
+        "repayment":{"@ref":"cf-1-2"}
+    }'''
     model = DummyLoan2.model_validate_json(json_str)
     model.resolve_references()
     assert id(model.loan) == id(model.repayment)
 
+
+def test_load_basic_type_loan_with_key_ref():
+    '''test load a simple model with json with some meta'''
+    json_str = '''{
+        "loan": {"@key":"8e50b68b-6426-44a8-bbfd-cbe3b833131c","@data":"100"},
+        "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131c"}
+    }'''
+    model = DummyLoan3.model_validate_json(json_str)
+    model.resolve_references()
+    assert id(model.loan) == id(model.repayment)
+
+
+def test_load_basic_type_loan_with_key_ref_and_constraints():
+    '''test load a simple model with json with some meta'''
+    json_str = '''{
+        "loan": {"@key":"8e50b68b-6426-44a8-bbfd-cbe3b833131c","@data":"100"},
+        "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131c"}
+    }'''
+    model = DummyLoan4.model_validate_json(json_str)
+    model.resolve_references()
+    assert id(model.loan) == id(model.repayment)
 
 # EOF
