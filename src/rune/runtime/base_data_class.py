@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
 from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
-                                   REFS_CONTAINER)
+                                   REFS_CONTAINER, UnresolvedReference)
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -40,6 +40,22 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         for property_nm, (key, ref_type) in refs.items():
             res[property_nm] = {ref_type: key}
         return res
+
+    def _build_refs_list(self):
+        refs = []
+        for prop_nm, obj in self.__dict__.items():
+            if isinstance(obj, BaseDataClass):
+                # pylint: disable=protected-access
+                refs.extend(obj._build_refs_list())
+            elif isinstance(obj, UnresolvedReference):
+                refs.append((prop_nm, obj))
+        return refs
+
+    def resolve_references(self):
+        '''resolves all attributes which are references'''
+        refs = self._build_refs_list()
+        for prop_nm, ref in refs:
+            self.bind_property_to(prop_nm, ref.get_reference())
 
     def validate_model(self,
                        recursively: bool = True,

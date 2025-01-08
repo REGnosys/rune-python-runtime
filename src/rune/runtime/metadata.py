@@ -37,6 +37,16 @@ class Reference:
             self.target, self.ref_type = get_object(self.target_key)
 
 
+class UnresolvedReference:
+    '''used by the deserialization to hold temporarily unresolved references'''
+    def __init__(self, ref):
+        self.ref_type, self.key = list(ref.items())[0]
+
+    def get_reference(self):
+        '''convert to a resolved reference'''
+        return Reference(self.key)
+
+
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
     def _get_meta_container(self) -> dict[str, Any]:
@@ -124,11 +134,13 @@ class BaseMetaDataMixin:
         if property_nm not in refs:
             # not a reference - check if allowed to replace with one
             old_val = getattr(self, property_nm)
-            if not isinstance(old_val, BaseMetaDataMixin):
+            if not isinstance(old_val,
+                              (BaseMetaDataMixin, UnresolvedReference)):
                 raise ValueError(f'Property {property_nm} of type '
                                  f"{type(old_val)} can't be a reference")
             # pylint: disable=protected-access
-            old_val._check_props_allowed({ref.ref_type: ''})
+            if isinstance(old_val, BaseMetaDataMixin):
+                old_val._check_props_allowed({ref.ref_type: ''})
         setattr(self, property_nm, ref.target)
         refs[property_nm] = (ref.target_key, ref.ref_type)
 
@@ -150,11 +162,28 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
             return obj
 
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
+
+        # References deserialization treatment
+        if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
+            if len(ref) != 1:
+                raise ValueError(f'Multiple references found: {ref}!')
+            return UnresolvedReference(ref)
+
+        # Model creation
         for k in metadata.keys():
             obj.pop(k)
         model = cls.model_validate(obj)  # type: ignore
         model.__dict__[META_CONTAINER] = metadata
         model.init_meta(allowed_meta)
+
+        # Keys deserialization treatment
+        keys = {k: v for k, v in metadata.items() if k.startswith('@key') and v}
+        if keys:
+            for key_t, key_v in keys.items():
+                key_desc = key_t.split(':')
+                ref_desc = ':' + key_desc[-1] if len(key_desc) > 1 else ''
+                register_object((model, '@ref' + ref_desc), key_v)
+
         return model
 
     @classmethod

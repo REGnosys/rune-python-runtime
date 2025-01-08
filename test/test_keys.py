@@ -214,4 +214,14 @@ def test_dump_key_ref_2():
     assert dict_['loan1']['loan']['@key'] == dict_['loan1']['repayment']['@ref']
     assert len(dict_['loan1']['repayment']) == 1
 
+
+def test_load_loan_with_key_ref():
+    '''test load a simple model with json with some meta'''
+    json_str = ('{"loan":{"@key":"cf-1-1","currency":"EUR","amount":"100"},'
+                '"repayment":{"@ref":"cf-1-1"}}')
+    model = DummyLoan2.model_validate_json(json_str)
+    model.resolve_references()
+    assert id(model.loan) == id(model.repayment)
+
+
 # EOF
