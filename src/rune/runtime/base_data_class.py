@@ -124,19 +124,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                      err)
         return exceptions
 
-    def check_one_of_constraint(self, *attr_names, necessity=True) -> bool:
-        """ Checks that one and only one attribute is set. """
-        values = self.model_dump()
-        vals = [values.get(n) for n in attr_names]
-        n_attr = sum(1 for v in vals if v is not None and v != [])
-        if necessity and n_attr != 1:
-            logging.error('One and only one of %s should be set!', attr_names)
-            return False
-        if not necessity and n_attr > 1:
-            logging.error('Only one of %s can be set!', attr_names)
-            return False
-        return True
-
     def add_to_list_attribute(self, attr_name: str, value) -> None:
         """
         Adds a value to a list attribute, ensuring the value is of an allowed
