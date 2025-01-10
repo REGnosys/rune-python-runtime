@@ -125,7 +125,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         return exceptions
 
     def add_to_list_attribute(self, attr_name: str, value) -> None:
-        """
+        '''
         Adds a value to a list attribute, ensuring the value is of an allowed
         type.
 
@@ -136,7 +136,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         Raises:
         AttributeError: If the attribute name is not found or not a list.
         TypeError: If the value type is not one of the allowed types.
-        """
+        '''
         if not hasattr(self, attr_name):
             raise AttributeError(f"Attribute {attr_name} not found.")
 
@@ -156,7 +156,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
 
     @classmethod
     def get_allowed_types_for_list_field(cls, field_name: str):
-        """
+        '''
         Gets the allowed types for a list field in a Pydantic model, supporting
         both Union and | operator.
 
@@ -166,7 +166,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
 
         Returns:
         tuple: A tuple of allowed types.
-        """
+        '''
         field_type = cls.__annotations__.get(field_name)
         if field_type and get_origin(field_type) is list:
             list_elem_type = get_args(field_type)[0]

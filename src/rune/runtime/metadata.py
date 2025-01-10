@@ -17,6 +17,13 @@ def _py_to_ser_key(key: str) -> str:
     return '@' + key.replace('_', ':')
 
 
+def _get_basic_type(annotated_type):
+    embedded_type = get_args(annotated_type)
+    if embedded_type:
+        return _get_basic_type(embedded_type[0])
+    return annotated_type
+
+
 class Reference:
     '''manages a reference to a object with a key'''
     def __init__(self, target: str | Any, ext_key: str | None = None):
@@ -141,11 +148,10 @@ class BaseMetaDataMixin:
             ref = Reference(ref)
 
         field_type = self.__class__.__annotations__.get(property_nm)
-        allowed_type = get_args(field_type)
-        allowed_type = allowed_type[0] if allowed_type else field_type
+        allowed_type = _get_basic_type(field_type)
         if not isinstance(ref.target, allowed_type):
             raise ValueError("Can't set reference. Incompatible types: "
-                             f"expected {get_args(field_type)[0]}, "
+                             f"expected {allowed_type}, "
                              f"got {ref.target.__class__}")
         refs = self.__dict__.setdefault(REFS_CONTAINER, {})
         if property_nm not in refs:
