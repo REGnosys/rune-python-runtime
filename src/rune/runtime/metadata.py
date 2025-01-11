@@ -356,6 +356,8 @@ class IntWithMeta(int, BasicTypeMetaDataMixin):
 class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     '''annotated number'''
     def __new__(cls, value, **kwds):
+        # NOTE: it could be necessary to convert the value to str if it is a
+        # float
         obj = Decimal.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
         return obj

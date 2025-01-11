@@ -2,7 +2,7 @@
 Testing basic types using the following Rune definitions:
 
 typeAlias ParameterisedNumberType:
-	number(digits: 18, fractionalDigits: 2)
+    number(digits: 18, fractionalDigits: 2)
 
 typeAlias ParameterisedStringType:
     string(minLength: 1, maxLength: 20, pattern: "[a-zA-Z]")
@@ -31,11 +31,10 @@ type Root:
 '''
 import datetime
 from decimal import Decimal
-from typing import Optional
-from pydantic import Field, FiniteFloat, StringConstraints
+from typing import Optional, Annotated
+from pydantic import Field
 from rune.runtime.base_data_class import BaseDataClass
-from rune.runtime.utils import rune_check_cardinality
-from rune.runtime.conditions import rune_condition
+# from rune.runtime.metadata import NumberWithMeta
 # pylint: disable=invalid-name
 
 
@@ -59,50 +58,29 @@ class BasicSingle(BaseDataClass):
 
 class BasicList(BaseDataClass):
     '''no doc'''
-    booleanTypes: list[bool] = Field([], description='')
-    numberTypes: list[Decimal] = Field([], description='')
-    parameterisedNumberTypes: list[Decimal] = Field([],
-                                                    description='',
-                                                    max_digits=18,
-                                                    decimal_places=2)
+    booleanTypes: list[bool] = Field([], description='', min_length=1)
+    numberTypes: list[Decimal] = Field([], description='', min_length=1)
+    # parameterisedNumberTypes: list[Annotated[
+    #     NumberWithMeta,
+    #     NumberWithMeta.serializer(),
+    #     NumberWithMeta.validator(('@ref', )),
+    #     Field(decimal_places=2, max_digits=6)]] = Field(
+    #         [],
+    #         description='',
+    #         min_length=1
+    #     )
+    parameterisedNumberTypes: list[Annotated[
+        Decimal,
+        Field(decimal_places=2, max_digits=5)]] = Field([],
+                                                        description='',
+                                                        min_length=1)
     # NOTE: the addition of a prefix and suffix to the regular expression!!!
-    parameterisedStringTypes: list[str] = Field([],
-                                                description='',
-                                                min_length=1,
-                                                max_length=20,
-                                                pattern=r'^[a-zA-Z]*$')
-    stringTypes: list[str] = Field([], description='')
-    timeType: list[datetime.time] = Field([], description='')
-
-    @rune_condition
-    def cardinality_booleanTypes(self):
-        '''no doc'''
-        return rune_check_cardinality(self.booleanTypes, 1, None)
-
-    @rune_condition
-    def cardinality_numberTypes(self):
-        '''no doc'''
-        return rune_check_cardinality(self.numberTypes, 1, None)
-
-    @rune_condition
-    def cardinality_parameterisedNumberTypes(self):
-        '''no doc'''
-        return rune_check_cardinality(self.parameterisedNumberTypes, 1, None)
-
-    @rune_condition
-    def cardinality_parameterisedStringTypes(self):
-        '''no doc'''
-        return rune_check_cardinality(self.parameterisedStringTypes, 1, None)
-
-    @rune_condition
-    def cardinality_stringTypes(self):
-        '''no doc'''
-        return rune_check_cardinality(self.stringTypes, 1, None)
-
-    @rune_condition
-    def cardinality_timeType(self):
-        '''no doc'''
-        return rune_check_cardinality(self.timeType, 1, None)
+    parameterisedStringTypes: list[Annotated[
+        str,
+        Field(min_length=1, max_length=20, pattern=r'^[a-zA-Z]*$')]] = Field(
+            [], description='', min_length=1)
+    stringTypes: list[str] = Field([], description='', min_length=1)
+    timeTypes: list[datetime.time] = Field([], description='', min_length=1)
 
 
 class Root(BaseDataClass):
