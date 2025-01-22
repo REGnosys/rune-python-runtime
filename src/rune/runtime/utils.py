@@ -9,8 +9,9 @@ from typing import Callable, Any
 __all__ = [
     'if_cond_fn', 'Multiprop', 'rune_any_elements', 'rune_get_only_element',
     'rune_filter', 'rune_all_elements', 'rune_contains', 'rune_disjoint',
-    'rune_join', 'rune_flatten_list', 'rune_resolve_attr', 'rune_count',
-    'rune_attr_exists', '_get_rune_object', 'rune_set_attr', 'rune_add_attr',
+    'rune_join', 'rune_flatten_list', 'rune_resolve_attr',
+    'rune_resolve_deep_attr', 'rune_count', 'rune_attr_exists',
+    '_get_rune_object', 'rune_set_attr', 'rune_add_attr',
     'rune_check_cardinality', 'rune_str', 'rune_check_one_of'
 ]
 
@@ -69,6 +70,26 @@ def rune_resolve_attr(obj: Any | None, attrib: str) -> Any | list[Any] | None:
         return obj[attrib]
 
     return getattr(obj, attrib, None)
+
+
+def rune_resolve_deep_attr(obj: Any | None,
+                              attrib: str) -> Any | list[Any] | None:
+    ''' Resolves a "deep path" attribute. If the attribute or the object is
+        not a "deep path" one, the function falls back to the regular
+        `rosetta_resolve_attr`.
+    '''
+    # pylint: disable=protected-access
+    if obj is None:
+        return None
+    # if not a "deep path" object or attribute, fall back to the std function
+    if (not hasattr(obj, '_CHOICE_ALIAS_MAP')
+            or attrib not in obj._CHOICE_ALIAS_MAP):
+        return rune_resolve_attr(obj, attrib)
+
+    for container_nm, getter_fn in obj._CHOICE_ALIAS_MAP[attrib]:
+        if container_obj := rune_resolve_attr(obj, container_nm):
+            return getter_fn(container_obj, attrib)
+    return None
 
 
 def rune_check_one_of(obj, *attr_names, necessity=True) -> bool:
