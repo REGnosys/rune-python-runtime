@@ -24,7 +24,6 @@ def test_enum_str():
     assert '2' == rune_str(x)
 
 
-
 if __name__ == '__main__':
     test_simple_conv()
     test_enum_str()
