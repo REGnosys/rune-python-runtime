@@ -3,7 +3,7 @@ from functools import partial, lru_cache
 import uuid
 from decimal import Decimal
 from typing import Any, Never, get_args
-from datetime import date, datetime, time
+import datetime
 from pydantic import PlainSerializer, PlainValidator, WrapValidator
 from rune.runtime.object_registry import register_object, get_object
 
@@ -275,44 +275,44 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
                              json_schema_input_type=str | dict)
 
 
-class DateWithMeta(date, BasicTypeMetaDataMixin):
+class DateWithMeta(datetime.date, BasicTypeMetaDataMixin):
     '''date with metadata'''
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
-        ymd = date.fromisoformat(value).timetuple()[:3]
-        obj = date.__new__(cls, *ymd)
+        ymd = datetime.date.fromisoformat(value).timetuple()[:3]
+        obj = datetime.date.__new__(cls, *ymd)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
 
-class TimeWithMeta(time, BasicTypeMetaDataMixin):
+class TimeWithMeta(datetime.time, BasicTypeMetaDataMixin):
     '''annotated time'''
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
-        aux = time.fromisoformat(value)
-        obj = time.__new__(cls,
-                           aux.hour,
-                           aux.minute,
-                           aux.second,
-                           aux.microsecond,
-                           aux.tzinfo,
-                           fold=aux.fold)
+        aux = datetime.time.fromisoformat(value)
+        obj = datetime.time.__new__(cls,
+                                    aux.hour,
+                                    aux.minute,
+                                    aux.second,
+                                    aux.microsecond,
+                                    aux.tzinfo,
+                                    fold=aux.fold)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
 
-class DateTimeWithMeta(datetime, BasicTypeMetaDataMixin):
+class DateTimeWithMeta(datetime.datetime, BasicTypeMetaDataMixin):
     '''annotated datetime'''
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
-        aux = datetime.fromisoformat(value)
-        obj = datetime.__new__(cls,
-                               aux.year,
-                               aux.month,
-                               aux.day,
-                               aux.hour,
-                               aux.minute,
-                               aux.second,
-                               aux.microsecond,
-                               aux.tzinfo,
-                               fold=aux.fold)
+        aux = datetime.datetime.fromisoformat(value)
+        obj = datetime.datetime.__new__(cls,
+                                        aux.year,
+                                        aux.month,
+                                        aux.day,
+                                        aux.hour,
+                                        aux.minute,
+                                        aux.second,
+                                        aux.microsecond,
+                                        aux.tzinfo,
+                                        fold=aux.fold)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
