@@ -21,6 +21,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     '''
     model_config = ConfigDict(extra='ignore',
                               revalidate_instances='always',
+                              use_enum_values=True,
                               arbitrary_types_allowed=True)
 
     def __setattr__(self, name: str, value: Any) -> None:
