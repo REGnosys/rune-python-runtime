@@ -149,7 +149,8 @@ class BaseMetaDataMixin:
 
         field_type = self.__class__.__annotations__.get(property_nm)
         allowed_type = _get_basic_type(field_type)
-        if not isinstance(ref.target, allowed_type):
+        if not (isinstance(allowed_type, str)
+                or isinstance(ref.target, allowed_type)):
             raise ValueError("Can't set reference. Incompatible types: "
                              f"expected {allowed_type}, "
                              f"got {ref.target.__class__}")
