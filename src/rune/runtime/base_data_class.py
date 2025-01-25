@@ -1,5 +1,7 @@
 '''Base class for all Rune type classes'''
 import logging
+import importlib
+import json
 from typing import get_args, get_origin, Any
 from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
 
@@ -7,6 +9,8 @@ from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
 from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
                                    REFS_CONTAINER, UnresolvedReference)
+
+ROOT_CONTAINER = '__rune_root_metadata'
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -21,7 +25,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     '''
     model_config = ConfigDict(extra='ignore',
                               revalidate_instances='always',
-                              use_enum_values=True,
                               arbitrary_types_allowed=True)
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -39,7 +42,49 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         refs = self.__dict__.get(REFS_CONTAINER, {})
         for property_nm, (key, ref_type) in refs.items():
             res[property_nm] = {ref_type: key}
+        res = self.__dict__.get(ROOT_CONTAINER, {}) | res
         return res
+
+    def rune_serialize(self,
+                       *,
+                       exclude_unset: bool = True,
+                       exclude_defaults: bool = True,
+                       **kwargs) -> str:
+        ''' Rune conform serialization to json string. To be invoked on the
+            model root.
+        '''
+        try:
+            self.validate_model()
+
+            root_meta = self.__dict__.setdefault(ROOT_CONTAINER, {})
+            root_meta['@type'] = self.__class__.__module__
+            root_meta['@model'] = self.__class__.__module__.split(
+                '.', maxsplit=1)[0]
+            root_meta['@version'] = self.get_model_version()
+
+            return self.model_dump_json(exclude_unset=exclude_unset,
+                                        exclude_defaults=exclude_defaults,
+                                        **kwargs)
+        finally:
+            self.__dict__.pop(ROOT_CONTAINER)
+
+    @classmethod
+    def rune_deserialize(cls, rune_json_str: str) -> BaseModel:
+        '''Rune compliant deserialization'''
+        rune_dict = json.loads(rune_json_str)
+        rune_dict.pop('@version', None)
+        rune_dict.pop('@model', None)
+        rune_type = rune_dict.pop('@type', None)
+        if rune_type:
+            rune_class_name = rune_type.rsplit('.', maxsplit=1)[-1]
+            rune_module = importlib.import_module(rune_type)
+            rune_cls = getattr(rune_module, rune_class_name)
+        else:
+            rune_cls = cls  # support for legacy json
+        model = rune_cls.model_validate(rune_dict)
+        model.resolve_references()
+        model.validate_model()
+        return model
 
     def resolve_references(self):
         '''resolves all attributes which are references'''
@@ -175,6 +220,19 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                 return get_args(list_elem_type)
             return (list_elem_type, )  # Single type or | operator used
         return ()
+
+    @classmethod
+    def get_model_version(cls):
+        ''' Attempt to obtain the Rune model version, in case of a failure,
+            0.0.0 will be returned
+        '''
+        try:
+            module = importlib.import_module(
+                cls.__module__.split('.', maxsplit=1)[0])
+            return getattr(module, 'rune_model_version', default='0.0.0')
+        # pylint: disable=bare-except
+        except:  # noqa
+            return '0.0.0'
 
 
 def _validate_conditions_recursively(obj, raise_exc=True):
