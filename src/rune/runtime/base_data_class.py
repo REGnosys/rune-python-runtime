@@ -8,7 +8,8 @@ from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
 from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
-                                   REFS_CONTAINER, UnresolvedReference)
+                                   REFS_CONTAINER, UnresolvedReference,
+                                   _EnumWrapper)
 
 ROOT_CONTAINER = '__rune_root_metadata'
 
@@ -33,6 +34,11 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         else:
             if name in self.__dict__.get(REFS_CONTAINER, {}):
                 self.__dict__[REFS_CONTAINER].pop(name)
+                if isinstance(self.__dict__[name], _EnumWrapper):
+                    self.__dict__[name] = _EnumWrapper()
+            if (isinstance(self.__dict__[name], _EnumWrapper)
+                    and not isinstance(value, _EnumWrapper)):
+                value = _EnumWrapper(value)
             super().__setattr__(name, value)
 
     @model_serializer(mode='wrap')

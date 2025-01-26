@@ -1,10 +1,12 @@
 '''Classes representing annotated basic Rune types'''
+from enum import Enum
 from functools import partial, lru_cache
 import uuid
 from decimal import Decimal
 from typing import Any, Never, get_args
 import datetime
-from pydantic import PlainSerializer, PlainValidator, WrapValidator
+from pydantic import (PlainSerializer, PlainValidator, WrapValidator,
+                      WrapSerializer)
 from rune.runtime.object_registry import register_object, get_object
 
 META_CONTAINER = '__rune_metadata'
@@ -121,7 +123,7 @@ class BaseMetaDataMixin:
             self.set_meta(key=key)
             try:
                 register_object((self, '@ref'), key)
-            except:
+            except:  # noqa
                 self.set_meta(key=None)
                 raise
         return key
@@ -138,7 +140,7 @@ class BaseMetaDataMixin:
         self.set_meta(key_external=key)
         try:
             register_object((self, '@ref:external'), key)
-        except:
+        except:  # noqa
             self.set_meta(key_external=None)
             raise
 
@@ -236,7 +238,7 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
 class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     '''holds the metadata associated with an instance'''
     @classmethod
-    def serialise(cls, obj, base_type,) -> dict:
+    def serialise(cls, obj, base_type) -> dict:
         '''used as serialisation method with pydantic'''
         res = obj.serialise_meta()
         res['@data'] = base_type(obj)
@@ -379,5 +381,93 @@ class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
                                      base_types=(Decimal, float, int, str),
                                      allowed_meta=allowed),
                              json_schema_input_type=float | int | str | dict)
+
+
+class _EnumWrapperDefaultVal(Enum):
+    '''marker for not set value in enum wrapper'''
+    NOT_SET = "NOT_SET"
+
+
+class _EnumWrapper(BaseMetaDataMixin):
+    '''wrapper for enums with metadata'''
+    def __init__(self, enum_instance=_EnumWrapperDefaultVal.NOT_SET):
+        if not isinstance(enum_instance, Enum):
+            raise ValueError("enum_instance must be an instance of an Enum")
+        self._enum_instance = enum_instance
+
+    @property
+    def enum_instance(self):
+        '''the actual enum instance'''
+        return self._enum_instance
+
+    @property
+    def name(self):
+        '''enum name - pass through'''
+        return self._enum_instance.name
+
+    @property
+    def value(self):
+        '''enum value  - pass through'''
+        return self._enum_instance.value
+
+    def __str__(self):
+        return str(self._enum_instance)
+
+    def __repr__(self):
+        return repr(self._enum_instance)
+
+    def __eq__(self, other):
+        if isinstance(other, _EnumWrapper):
+            return self._enum_instance == other._enum_instance
+        return self._enum_instance == other
+
+    def __hash__(self):
+        return hash(self._enum_instance)
+
+
+class EnumWithMetaMixin:
+    '''holds the metadata associated with a Rune Enum'''
+    @classmethod
+    def serialise(cls, obj, handler, info) -> dict:
+        '''used as serialisation method with pydantic'''
+        res = obj.serialise_meta()
+        res['@data'] = handler(obj.enum_instance, info)
+        return res
+
+    @classmethod
+    def deserialize(cls, obj, allowed_meta: set[str]):
+        '''method used as pydantic `validator`'''
+        model = obj
+        if (isinstance(obj, str)
+                and not isinstance(obj, _EnumWrapper)):
+            model = _EnumWrapper(cls(obj))  # type: ignore
+        if (isinstance(obj, EnumWithMetaMixin)
+                and not isinstance(obj, _EnumWrapper)):
+            model = _EnumWrapper(obj)  # type: ignore
+        elif isinstance(obj, dict):
+            # pylint: disable=protected-access
+            if ref := _EnumWrapper._create_unresolved_ref(obj):
+                return ref
+            data = obj.pop('@data')
+            model = _EnumWrapper(cls(data))  # type: ignore
+            model.set_meta(check_allowed=False, **obj)
+            model._register_keys(obj)  # pylint: disable=protected-access
+        if _EnumWrapper.meta_checks_enabled():
+            model.init_meta(allowed_meta)
+        return model
+
+    @classmethod
+    @lru_cache
+    def serializer(cls):
+        '''should return the validator for the specific class'''
+        return WrapSerializer(cls.serialise, return_type=dict)
+
+    @classmethod
+    @lru_cache
+    def validator(cls, allowed_meta: tuple[str] | tuple[Never, ...] = tuple()):
+        '''default validator for the specific class'''
+        allowed = set(allowed_meta)
+        return PlainValidator(partial(cls.deserialize, allowed_meta=allowed),
+                              json_schema_input_type=str | dict)
 
 # EOF

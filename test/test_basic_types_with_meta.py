@@ -1,5 +1,6 @@
 '''test module for the annotated base rune types'''
 from datetime import date, time, datetime
+from enum import Enum
 from decimal import Decimal
 import json
 import pytest
@@ -12,6 +13,8 @@ from rune.runtime.metadata import DateWithMeta
 from rune.runtime.metadata import DateTimeWithMeta
 from rune.runtime.metadata import TimeWithMeta
 from rune.runtime.metadata import StrWithMeta
+from rune.runtime.metadata import EnumWithMetaMixin
+from rune.runtime.metadata import _EnumWrapper
 
 
 class AnnotatedStringModel(BaseDataClass):
@@ -77,6 +80,21 @@ class ConstrainedNumberModel(BaseDataClass):
                       NumberWithMeta.serializer(),
                       NumberWithMeta.validator(('@scheme',))
     ] = Field(..., description="Test amount", decimal_places=3, ge=0)
+
+
+class EnumType(EnumWithMetaMixin, Enum):
+    '''test rune enum'''
+    A = "A"
+    B = "B"
+    C = "C"
+
+
+class AnnotatedEnumModel(BaseDataClass):
+    '''string test class'''
+    enum_t: Annotated[EnumType,
+                      EnumType.serializer(),
+                      EnumType.validator(
+                          ('@scheme', ))] = Field(..., description='')
 
 
 def test_dump_annotated_string_simple():
@@ -313,5 +331,16 @@ def test_fail_create_constrained_num_model():
     '''test the creation of the constrained str model'''
     with pytest.raises(ValidationError):
         ConstrainedNumberModel(amount=NumberWithMeta(-1))
+
+
+def test_annotated_enum_assignment():
+    '''test assignment'''
+    model = AnnotatedEnumModel(enum_t=EnumType.B)
+    assert model.enum_t == EnumType.B
+    assert isinstance(model.enum_t, _EnumWrapper)
+
+    model.enum_t = EnumType.C
+    assert model.enum_t != EnumType.B
+    assert isinstance(model.enum_t, _EnumWrapper)
 
 # EOF
