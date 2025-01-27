@@ -80,13 +80,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         rune_dict = json.loads(rune_json_str)
         rune_dict.pop('@version', None)
         rune_dict.pop('@model', None)
-        rune_type = rune_dict.pop('@type', None)
-        if rune_type:
-            rune_class_name = rune_type.rsplit('.', maxsplit=1)[-1]
-            rune_module = importlib.import_module(rune_type)
-            rune_cls = getattr(rune_module, rune_class_name)
-        else:
-            rune_cls = cls  # support for legacy json
+        rune_cls = cls._type_to_cls(rune_dict)
         model = rune_cls.model_validate(rune_dict)
         model.resolve_references()
         model.validate_model()
