@@ -1,5 +1,6 @@
 '''Classes representing annotated basic Rune types'''
 from enum import Enum
+import importlib
 from functools import partial, lru_cache
 import uuid
 from decimal import Decimal
@@ -189,10 +190,20 @@ class BaseMetaDataMixin:
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
     '''metadata support for complex types'''
     @classmethod
+    def _type_to_cls(cls, metadata:dict[str, Any]):
+        if rune_type:= metadata.pop('@type', None):
+            rune_class_name = rune_type.rsplit('.', maxsplit=1)[-1]
+            rune_module = importlib.import_module(rune_type)
+            return getattr(rune_module, rune_class_name)
+        return cls  # support for legacy json
+
+    @classmethod
     def serialise(cls, obj) -> dict:
         '''used as serialisation method with pydantic'''
         res = obj.serialise_meta()
         res |= obj.model_dump(exclude_unset=True, exclude_defaults=True)
+        if cls != obj.__class__:
+            res = {'@type': obj.__class__.__module__} | res
         return res
 
     @classmethod
@@ -211,7 +222,11 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         # Model creation
         for k in metadata.keys():
             obj.pop(k)
-        model = cls.model_validate(obj)  # type: ignore
+
+        rune_cls = cls._type_to_cls(metadata)
+        if rune_cls != cls and not issubclass(rune_cls, cls):
+            raise ValueError(f'{rune_cls} has to be a child class of {cls}!')
+        model = rune_cls.model_validate(obj)  # type: ignore
         model.__dict__[META_CONTAINER] = metadata
         if cls.meta_checks_enabled():
             model.init_meta(allowed_meta)
