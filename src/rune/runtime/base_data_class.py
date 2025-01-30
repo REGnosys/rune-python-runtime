@@ -9,9 +9,10 @@ from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
 from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
                                    REFS_CONTAINER, UnresolvedReference,
-                                   _EnumWrapper)
+                                   BaseMetaDataMixin, _EnumWrapper)
 
 ROOT_CONTAINER = '__rune_root_metadata'
+PARENT_PROP = '__rune_parent'
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -32,13 +33,18 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         if isinstance(value, Reference):
             self.bind_property_to(name, value)
         else:
+            # replace reference with an object
             if name in self.__dict__.get(REFS_CONTAINER, {}):
                 self.__dict__[REFS_CONTAINER].pop(name)
                 if isinstance(self.__dict__[name], _EnumWrapper):
                     self.__dict__[name] = _EnumWrapper()
+            # if the value is an enum, pass it to the EnumWrapper
             if (isinstance(self.__dict__[name], _EnumWrapper)
                     and not isinstance(value, _EnumWrapper)):
                 value = _EnumWrapper(value)
+            # if the value is a "model", register as __rune_parent
+            if isinstance(value, BaseMetaDataMixin):
+                value.__dict__[PARENT_PROP] = self
             super().__setattr__(name, value)
 
     @model_serializer(mode='wrap')

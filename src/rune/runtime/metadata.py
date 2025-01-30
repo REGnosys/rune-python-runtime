@@ -168,7 +168,8 @@ class BaseMetaDataMixin:
             # pylint: disable=protected-access
             if isinstance(old_val, BaseMetaDataMixin):
                 old_val._check_props_allowed({ref.ref_type: ''})
-        setattr(self, property_nm, ref.target)
+        # setattr(self, property_nm, ref.target)  # nope - need to avoid here!
+        self.__dict__[property_nm] = ref.target  # NOTE: avoid here setattr
         refs[property_nm] = (ref.target_key, ref.ref_type)
 
     def _register_keys(self, metadata):
@@ -210,7 +211,8 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
     def deserialize(cls, obj, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
         if isinstance(obj, cls):
-            obj.init_meta(allowed_meta)
+            if cls.meta_checks_enabled():
+                obj.init_meta(allowed_meta)
             return obj
 
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
