@@ -49,6 +49,9 @@ class NodeRef(BaseDataClass):
         A.serializer(),
         A.validator(('@key', '@ref'))]] = Field(None, description='')
 
+    _KEY_REF_CONSTRAINTS = {
+        'aReference': {'@ref', '@ref:external'}
+    }
 
 class AttributeRef(BaseDataClass):
     '''no doc'''
@@ -61,6 +64,10 @@ class AttributeRef(BaseDataClass):
         DateWithMeta,
         DateWithMeta.serializer(),
         DateWithMeta.validator(('@ref', ))]] = Field(None, description='')
+
+    _KEY_REF_CONSTRAINTS = {
+        'dateReference': {'@ref', '@ref:external'}
+    }
 
 
 class Root(BaseDataClass):
@@ -129,9 +136,8 @@ def test_dangling_attribute_ref():
             }
         }
     '''
-    model = Root.model_validate_json(json_str)
     with pytest.raises(KeyError):
-        model.resolve_references()
+        Root.model_validate_json(json_str)
 
 
 def test_dangling_node_ref():
@@ -145,8 +151,7 @@ def test_dangling_node_ref():
             }
         }
     '''
-    model = Root.model_validate_json(json_str)
     with pytest.raises(KeyError):
-        model.resolve_references()
+        Root.model_validate_json(json_str)
 
 # EOF

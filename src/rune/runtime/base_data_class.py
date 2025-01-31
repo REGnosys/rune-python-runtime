@@ -3,7 +3,9 @@ import logging
 import importlib
 import json
 from typing import get_args, get_origin, Any
-from pydantic import BaseModel, ValidationError, ConfigDict, model_serializer
+from typing_extensions import Self
+from pydantic import (BaseModel, ValidationError, ConfigDict, model_serializer,
+                      model_validator, ModelWrapValidatorHandler)
 
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
@@ -48,7 +50,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             super().__setattr__(name, value)
 
     @model_serializer(mode='wrap')
-    def _resolve_refs(self, serializer, info):
+    def _serialize_refs(self, serializer, info):
         '''should replace objects with refs while serializing'''
         res = serializer(self, info)
         refs = self.__dict__.get(REFS_CONTAINER, {})
@@ -56,6 +58,15 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             res[property_nm] = {ref_type: key}
         res = self.__dict__.get(ROOT_CONTAINER, {}) | res
         return res
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def _deserialize_refs(cls, data: Any,
+                          handler: ModelWrapValidatorHandler[Self]) -> Self:
+        '''should resolve refs after creation'''
+        obj = handler(data)
+        obj.resolve_references()
+        return obj
 
     def rune_serialize(self,
                        *,
@@ -88,7 +99,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         rune_dict.pop('@model', None)
         rune_cls = cls._type_to_cls(rune_dict)
         model = rune_cls.model_validate(rune_dict)
-        model.resolve_references()
+        # model.resolve_references()
         model.validate_model()
         return model
 
@@ -96,10 +107,14 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         '''resolves all attributes which are references'''
         refs = []
         for prop_nm, obj in self.__dict__.items():
-            if isinstance(obj, BaseDataClass):
-                obj.resolve_references()
-            elif isinstance(obj, UnresolvedReference):
+            if isinstance(obj, (UnresolvedReference, Reference)):
                 refs.append((prop_nm, obj.get_reference()))
+
+        # for prop_nm, obj in self.__dict__.items():
+        #     if isinstance(obj, BaseDataClass):
+        #         obj.resolve_references()
+        #     elif isinstance(obj, (UnresolvedReference, Reference)):
+        #         refs.append((prop_nm, obj.get_reference()))
 
         for prop_nm, ref in refs:
             self.bind_property_to(prop_nm, ref)

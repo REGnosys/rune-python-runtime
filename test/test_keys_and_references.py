@@ -5,7 +5,7 @@ import pytest
 from pydantic import Field, ValidationError
 
 from rune.runtime.base_data_class import BaseDataClass
-from rune.runtime.metadata import Reference
+from rune.runtime.metadata import Reference, KeyType
 from rune.runtime.metadata import NumberWithMeta, StrWithMeta
 
 
@@ -40,6 +40,10 @@ class DummyLoan2(BaseDataClass):
                                                ...,
                                                description='repaid amount')
 
+    _KEY_REF_CONSTRAINTS = {
+        'loan': {'@ref', '@ref:external'},
+        'repayment': {'@ref', '@ref:external'}
+    }
 
 class DummyLoan3(BaseDataClass):
     '''number test class'''
@@ -55,6 +59,11 @@ class DummyLoan3(BaseDataClass):
                              ('@ref', '@ref:external'))] = Field(...,
                                                   description="Test amount",
                                                   decimal_places=3)
+
+    _KEY_REF_CONSTRAINTS = {
+        'loan': {'@ref', '@ref:external'},
+        'repayment': {'@ref', '@ref:external'}
+    }
 
 
 class DummyLoan4(BaseDataClass):
@@ -72,6 +81,10 @@ class DummyLoan4(BaseDataClass):
                                                   description="Test amount",
                                                   decimal_places=3, gt=0)
 
+    _KEY_REF_CONSTRAINTS = {
+        'loan': {'@ref', '@ref:external'},
+        'repayment': {'@ref', '@ref:external'}
+    }
 
 class DummyTradeParties(BaseDataClass):
     '''number test class'''
@@ -85,6 +98,10 @@ class DummyTradeParties(BaseDataClass):
                       StrWithMeta.validator(
                           ('@ref',
                            '@ref:external'))] = Field(..., description="cpty2")
+
+    _KEY_REF_CONSTRAINTS = {
+        'party2': {'@ref', '@ref:external'}
+    }
 
 
 class DummyBiLoan(BaseDataClass):
@@ -169,7 +186,8 @@ def test_ref_ext_assign_2():
     '''test use a ext key and ref'''
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
                        repayment=CashFlow(currency='EUR', amount=101))
-    model.loan.set_external_key('ext_key3') # pylint: disable=no-member
+    # pylint: disable=no-member
+    model.loan.set_external_key('ext_key3', KeyType.EXTERNAL)
     model.repayment = Reference('ext_key3')
     assert id(model.loan) == id(model.repayment)
 

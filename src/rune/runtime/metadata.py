@@ -27,17 +27,47 @@ def _get_basic_type(annotated_type):
     return annotated_type
 
 
+class KeyType(Enum):
+    '''Enum for the currently supported by Rune external keys/refs'''
+    EXTERNAL = 'external'
+    SCOPED = 'scoped'
+
+    @property
+    def key_tag(self):
+        '''the key tag as used internally'''
+        return f'key_{self.value}'
+
+    @property
+    def rune_key_tag(self):
+        '''the key tag as represented in rune'''
+        return f'@key:{self.value}'
+
+    @property
+    def ref_tag(self):
+        '''the ref tag as used internally'''
+        return f'ref_{self.value}'
+
+    @property
+    def rune_ref_tag(self):
+        '''the ref tag as represented in rune'''
+        return f'@ref:{self.value}'
+
+
 class Reference:
     '''manages a reference to a object with a key'''
-    def __init__(self, target: str | Any, ext_key: str | None = None):
+
+    def __init__(self,
+                 target: str | Any,
+                 ext_key: str | None = None,
+                 key_type: KeyType = KeyType.EXTERNAL):
         if not isinstance(target, BaseMetaDataMixin) and ext_key:
             raise ValueError('Need to pass an object as target when specifying '
                              'an external key!')
         if ext_key:
-            target.set_external_key(ext_key)  # type: ignore
+            target.set_external_key(ext_key, key_type)  # type: ignore
             self.target = target
             self.target_key = ext_key
-            self.ref_type = '@ref:external'
+            self.ref_type = key_type.rune_ref_tag
         elif isinstance(target, BaseMetaDataMixin):
             self.target = target
             self.target_key = target.get_or_create_key()
@@ -45,6 +75,10 @@ class Reference:
         else:
             self.target_key = target
             self.target, self.ref_type = get_object(self.target_key)
+
+    def get_reference(self):
+        '''returns itself reference'''
+        return self
 
 
 class UnresolvedReference:
@@ -129,26 +163,32 @@ class BaseMetaDataMixin:
                 raise
         return key
 
-    def set_external_key(self, key: str):
+    def set_external_key(self, key: str, key_type: KeyType):
         '''registers this object under the provided external key'''
-        aux = self.get_meta('key_external')
+        aux = self.get_meta(key_type.key_tag)
         if aux and aux != key:
             raise ValueError(f'This object already has an external key {aux}!'
                              f'Can\'t change it to {key}')
         if aux == key:
             return
 
-        self.set_meta(key_external=key)
+        self.set_meta(**{key_type.key_tag: key})
         try:
-            register_object((self, '@ref:external'), key)
+            register_object((self, key_type.rune_ref_tag), key)
         except:  # noqa
-            self.set_meta(key_external=None)
+            self.set_meta(**{key_type.key_tag: None})
             raise
 
     def bind_property_to(self, property_nm: str, ref: str | Any):
         '''set the property to reference the object referenced by the key'''
         if not isinstance(ref, Reference):
             ref = Reference(ref)
+
+        allowed_ref_types = getattr(self, '_KEY_REF_CONSTRAINTS', {})
+        if ref.ref_type not in allowed_ref_types.get(property_nm, {}):
+            raise ValueError(f'Ref of type {ref.ref_type} '
+                             f'not allowed for {property_nm}. Allowed types '
+                             f'are: {allowed_ref_types.get(property_nm, {})}')
 
         field_type = self.__class__.__annotations__.get(property_nm)
         allowed_type = _get_basic_type(field_type)
@@ -161,8 +201,9 @@ class BaseMetaDataMixin:
         if property_nm not in refs:
             # not a reference - check if allowed to replace with one
             old_val = getattr(self, property_nm)
-            if not isinstance(old_val,
-                              (BaseMetaDataMixin, UnresolvedReference)):
+            if not isinstance(
+                    old_val,
+                (BaseMetaDataMixin, UnresolvedReference, Reference)):
                 raise ValueError(f'Property {property_nm} of type '
                                  f"{type(old_val)} can't be a reference")
             # pylint: disable=protected-access
@@ -213,6 +254,9 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         if isinstance(obj, cls):
             if cls.meta_checks_enabled():
                 obj.init_meta(allowed_meta)
+            return obj
+
+        if isinstance(obj, Reference):
             return obj
 
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
