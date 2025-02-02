@@ -10,11 +10,10 @@ from pydantic import (BaseModel, ValidationError, ConfigDict, model_serializer,
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
 from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
-                                   REFS_CONTAINER, UnresolvedReference,
-                                   BaseMetaDataMixin, _EnumWrapper)
+                                   UnresolvedReference, BaseMetaDataMixin,
+                                   _EnumWrapper, RUNE_OBJ_MAPS)
 
 ROOT_CONTAINER = '__rune_root_metadata'
-PARENT_PROP = '__rune_parent'
 
 
 class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
@@ -36,26 +35,26 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             self.bind_property_to(name, value)
         else:
             # replace reference with an object
-            if name in self.__dict__.get(REFS_CONTAINER, {}):
-                self.__dict__[REFS_CONTAINER].pop(name)
+            if name in self.get_rune_refs_container():
+                self.remove_rune_ref(name)
                 if isinstance(self.__dict__[name], _EnumWrapper):
                     self.__dict__[name] = _EnumWrapper()
             # if the value is an enum, pass it to the EnumWrapper
             if (isinstance(self.__dict__[name], _EnumWrapper)
                     and not isinstance(value, _EnumWrapper)):
                 value = _EnumWrapper(value)
-            # if the value is a "model", register as __rune_parent
+            # if the value is a "model", register as rune_parent
             if isinstance(value, BaseMetaDataMixin):
-                value.__dict__[PARENT_PROP] = self
+                value.set_rune_parent(self)
             super().__setattr__(name, value)
 
     @model_serializer(mode='wrap')
     def _serialize_refs(self, serializer, info):
         '''should replace objects with refs while serializing'''
         res = serializer(self, info)
-        refs = self.__dict__.get(REFS_CONTAINER, {})
+        refs = self.get_rune_refs_container()
         for property_nm, (key, ref_type) in refs.items():
-            res[property_nm] = {ref_type: key}
+            res[property_nm] = {ref_type.rune_ref_tag: key}
         res = self.__dict__.get(ROOT_CONTAINER, {}) | res
         return res
 
@@ -65,6 +64,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                           handler: ModelWrapValidatorHandler[Self]) -> Self:
         '''should resolve refs after creation'''
         obj = handler(data)
+        obj.init_rune_parent()
         obj.resolve_references()
         return obj
 
@@ -103,18 +103,23 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         model.validate_model()
         return model
 
+    def init_rune_parent(self):
+        '''sets the rune parent in all properties'''
+        refs = self.get_rune_refs_container()
+        if not self.get_rune_parent() and RUNE_OBJ_MAPS not in self.__dict__:
+            self.__dict__[RUNE_OBJ_MAPS] = {}
+
+        for prop_nm, obj in self.__dict__.items():
+            if (isinstance(obj, BaseMetaDataMixin)
+                    and not prop_nm.startswith('__') and prop_nm not in refs):
+                obj.set_rune_parent(self)
+
     def resolve_references(self):
         '''resolves all attributes which are references'''
         refs = []
         for prop_nm, obj in self.__dict__.items():
             if isinstance(obj, (UnresolvedReference, Reference)):
-                refs.append((prop_nm, obj.get_reference()))
-
-        # for prop_nm, obj in self.__dict__.items():
-        #     if isinstance(obj, BaseDataClass):
-        #         obj.resolve_references()
-        #     elif isinstance(obj, (UnresolvedReference, Reference)):
-        #         refs.append((prop_nm, obj.get_reference()))
+                refs.append((prop_nm, obj.get_reference(self)))
 
         for prop_nm, ref in refs:
             self.bind_property_to(prop_nm, ref)
@@ -183,6 +188,8 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                 logging.info('Condition %s for %s satisfied.', name, self_rep)
         if recursively:
             for k, v in self.__dict__.items():
+                if k.startswith('__'):  # ignore *all* private vars!
+                    continue
                 logging.info('Validating conditions of property %s', k)
                 exceptions += _validate_conditions_recursively(
                     v, raise_exc=raise_exc)

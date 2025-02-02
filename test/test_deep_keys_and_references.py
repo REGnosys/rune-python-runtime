@@ -1,4 +1,4 @@
-'''test module for rune root lifecycle'''
+'''test module for ref lifecycle'''
 from typing import Optional, Annotated
 from pydantic import Field
 import pytest
