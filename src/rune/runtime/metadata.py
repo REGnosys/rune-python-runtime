@@ -6,12 +6,15 @@ import uuid
 from decimal import Decimal
 from typing import Any, Never, get_args
 import datetime
+from typing_extensions import Self
 from pydantic import (PlainSerializer, PlainValidator, WrapValidator,
                       WrapSerializer)
-from rune.runtime.object_registry import register_object, get_object
+# from rune.runtime.object_registry import get_object
 
 META_CONTAINER = '__rune_metadata'
 REFS_CONTAINER = '__rune_references'
+PARENT_PROP = '__rune_parent'
+RUNE_OBJ_MAPS = '__rune_object_maps'
 
 
 def _py_to_ser_key(key: str) -> str:
@@ -27,38 +30,91 @@ def _get_basic_type(annotated_type):
     return annotated_type
 
 
+class KeyType(Enum):
+    '''Enum for the currently supported by Rune external keys/refs'''
+    INTERNAL = 'internal'
+    EXTERNAL = 'external'
+    SCOPED = 'scoped'
+
+    @property
+    def key_tag(self):
+        '''the key tag as used internally'''
+        if self == KeyType.INTERNAL:
+            return 'key'
+        return f'key_{self.value}'
+
+    @property
+    def rune_key_tag(self):
+        '''the key tag as represented in rune'''
+        if self == KeyType.INTERNAL:
+            return '@key'
+        return f'@key:{self.value}'
+
+    @property
+    def ref_tag(self):
+        '''the ref tag as used internally'''
+        if self == KeyType.INTERNAL:
+            return 'ref'
+        return f'ref_{self.value}'
+
+    @property
+    def rune_ref_tag(self):
+        '''the ref tag as represented in rune'''
+        if self == KeyType.INTERNAL:
+            return '@ref'
+        return f'@ref:{self.value}'
+
+    @classmethod
+    def from_rune(cls, rune_item: str):
+        '''returns an enum instance for the passed in rune key/ref'''
+        rune_consts = rune_item.split(':')
+        rune_type = rune_consts[-1] if len(rune_consts) > 1 else 'internal'
+        return KeyType(rune_type)
+
+
 class Reference:
     '''manages a reference to a object with a key'''
-    def __init__(self, target: str | Any, ext_key: str | None = None):
+    def __init__(self,
+                 target: str | Any,
+                 ext_key: str | None = None,
+                 key_type: KeyType = KeyType.EXTERNAL,
+                 parent=None):
         if not isinstance(target, BaseMetaDataMixin) and ext_key:
             raise ValueError('Need to pass an object as target when specifying '
                              'an external key!')
         if ext_key:
-            target.set_external_key(ext_key)  # type: ignore
+            target.set_external_key(ext_key, key_type)  # type: ignore
             self.target = target
             self.target_key = ext_key
-            self.ref_type = '@ref:external'
+            self.key_type = key_type
         elif isinstance(target, BaseMetaDataMixin):
             self.target = target
             self.target_key = target.get_or_create_key()
-            self.ref_type = '@ref'
+            self.key_type = KeyType.INTERNAL
         else:
             self.target_key = target
-            self.target, self.ref_type = get_object(self.target_key)
+            self.key_type = key_type
+            self.target = parent.get_object_by_key(target, key_type)
+
+    def get_reference(self, _):
+        '''returns itself reference'''
+        return self
 
 
 class UnresolvedReference:
     '''used by the deserialization to hold temporarily unresolved references'''
-    def __init__(self, ref):
-        self.ref_type, self.key = list(ref.items())[0]
+    def __init__(self, key):
+        rune_type, self.key = list(key.items())[0]
+        self.key_type = KeyType.from_rune(rune_type)
 
-    def get_reference(self):
+    def get_reference(self, parent):
         '''convert to a resolved reference'''
-        return Reference(self.key)
+        return Reference(self.key, key_type=self.key_type, parent=parent)
 
 
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
+    _DEFAULT_SCOPE_TYPE = 'cdm.event.common.TradeState.TradeState'
     __meta_check_disabled = False
 
     @classmethod
@@ -123,32 +179,40 @@ class BaseMetaDataMixin:
             key = str(uuid.uuid4())
             self.set_meta(key=key)
             try:
-                register_object((self, '@ref'), key)
+                self._get_object_map(KeyType.INTERNAL)[key] = self
             except:  # noqa
                 self.set_meta(key=None)
                 raise
         return key
 
-    def set_external_key(self, key: str):
+    def set_external_key(self, key: str, key_type: KeyType):
         '''registers this object under the provided external key'''
-        aux = self.get_meta('key_external')
+        aux = self.get_meta(key_type.key_tag)
         if aux and aux != key:
             raise ValueError(f'This object already has an external key {aux}!'
                              f'Can\'t change it to {key}')
         if aux == key:
             return
 
-        self.set_meta(key_external=key)
+        self.set_meta(**{key_type.key_tag: key})
         try:
-            register_object((self, '@ref:external'), key)
+            self._get_object_map(key_type)[key] = self
         except:  # noqa
-            self.set_meta(key_external=None)
+            self.set_meta(**{key_type.key_tag: None})
             raise
 
-    def bind_property_to(self, property_nm: str, ref: str | Any):
+    def get_object_by_key(self, key: str, key_type: KeyType):
+        '''retrieve an object with a key an key type'''
+        return self._get_object_map(key_type)[key]
+
+    def bind_property_to(self, property_nm: str, ref: Reference):
         '''set the property to reference the object referenced by the key'''
-        if not isinstance(ref, Reference):
-            ref = Reference(ref)
+        allowed_ref_types = getattr(self, '_KEY_REF_CONSTRAINTS', {})
+        if ref.key_type.rune_ref_tag not in allowed_ref_types.get(
+                property_nm, {}):
+            raise ValueError(f'Ref of type {ref.key_type} '
+                             f'not allowed for {property_nm}. Allowed types '
+                             f'are: {allowed_ref_types.get(property_nm, {})}')
 
         field_type = self.__class__.__annotations__.get(property_nm)
         allowed_type = _get_basic_type(field_type)
@@ -161,30 +225,108 @@ class BaseMetaDataMixin:
         if property_nm not in refs:
             # not a reference - check if allowed to replace with one
             old_val = getattr(self, property_nm)
-            if not isinstance(old_val,
-                              (BaseMetaDataMixin, UnresolvedReference)):
+            if not isinstance(
+                    old_val,
+                (BaseMetaDataMixin, UnresolvedReference, Reference)):
                 raise ValueError(f'Property {property_nm} of type '
                                  f"{type(old_val)} can't be a reference")
             # pylint: disable=protected-access
             if isinstance(old_val, BaseMetaDataMixin):
-                old_val._check_props_allowed({ref.ref_type: ''})
-        setattr(self, property_nm, ref.target)
-        refs[property_nm] = (ref.target_key, ref.ref_type)
+                old_val._check_props_allowed({ref.key_type.rune_ref_tag: ''})
+        # setattr(self, property_nm, ref.target)  # nope - need to avoid here!
+        self.__dict__[property_nm] = ref.target  # NOTE: avoid here setattr
+        refs[property_nm] = (ref.target_key, ref.key_type)
 
     def _register_keys(self, metadata):
         keys = {k: v for k, v in metadata.items() if k.startswith('@key') and v}
         for key_t, key_v in keys.items():
-            key_desc = key_t.split(':')
-            ref_desc = ':' + key_desc[-1] if len(key_desc) > 1 else ''
-            register_object((self, '@ref' + ref_desc), key_v)
+            self._get_object_map(KeyType.from_rune(key_t))[key_v] = self
+
+    def _get_object_map(self, key_type: KeyType) -> dict[str, Any]:
+        if not self.get_rune_parent():
+            object_maps = self.__dict__.setdefault(RUNE_OBJ_MAPS, {})
+            return object_maps.setdefault(key_type, {})
+        if local_map := self.__dict__.get(RUNE_OBJ_MAPS, {}).get(key_type):
+            return local_map
+        # pylint: disable=protected-access
+        return self.get_rune_parent()._get_object_map(key_type)  # type:ignore
 
     @classmethod
     def _create_unresolved_ref(cls, metadata) -> UnresolvedReference | None:
         if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
             if len(ref) != 1:
-                raise ValueError(f'Multiple references found: {ref}!')
+                ref.pop(KeyType.INTERNAL.rune_ref_tag, None)
+                if len(ref) != 1:
+                    ref.pop(KeyType.EXTERNAL.rune_ref_tag, None)
+                    if len(ref) != 1:
+                        raise ValueError(f'Multiple references found: {ref}!')
             return UnresolvedReference(ref)
         return None
+
+    def get_rune_parent(self) -> Self | None:
+        '''the parent object'''
+        return self.__dict__.get(PARENT_PROP)
+
+    def set_rune_parent(self, parent: Self):
+        '''sets the parent object'''
+        self.__dict__[PARENT_PROP] = parent
+        if obj_maps := self.__dict__.pop(RUNE_OBJ_MAPS, None):
+            # pylint: disable=protected-access
+            self._update_object_maps(obj_maps)
+
+    def _extract_scoped_map(self, maps):
+        scoped = None
+        if self.is_scope_instance():
+            scoped = maps.pop(KeyType.SCOPED, None)
+        return scoped, maps
+
+    def _update_object_maps(self, new_maps):
+        if parent := self.get_rune_parent():
+            scoped, reduced_maps = self._extract_scoped_map(new_maps)
+            # pylint: disable=protected-access
+            parent._update_object_maps(reduced_maps)
+            if not scoped:
+                return
+            new_maps = {KeyType.SCOPED: scoped}
+
+        obj_maps = self.__dict__.setdefault(RUNE_OBJ_MAPS, {})
+        for map_type, new_map in new_maps.items():
+            local_map = obj_maps.setdefault(map_type, {})
+            if dup_keys := set(local_map.keys()).intersection(
+                    set(new_map.keys())):
+                raise ValueError('Duplicated keys detected in updating the '
+                                 f'object map {map_type}. '
+                                 f'Duplicated keys {dup_keys}')
+            local_map |= new_map
+
+    def get_rune_refs_container(self):
+        '''return the dictionary of the refs held'''
+        return self.__dict__.get(REFS_CONTAINER, {})
+
+    def remove_rune_ref(self, name):
+        '''remove a reference'''
+        return self.__dict__[REFS_CONTAINER].pop(name)
+
+    @classmethod
+    @lru_cache
+    def _get_rune_scope_type(cls):
+        ''' Attempt to obtain the name of the rune scoping type,
+            in case of a failure, None will be returned.
+        '''
+        try:
+            module = importlib.import_module(
+                cls.__module__.split('.', maxsplit=1)[0])
+            return getattr(module, 'rune_scope_type', default=None)
+        # pylint: disable=bare-except
+        except:  # noqa
+            return None
+
+    def is_scope_instance(self):
+        '''is this object a scope for `scoped` keys/references'''
+        if not (scope := self._get_rune_scope_type()):
+            scope = self._DEFAULT_SCOPE_TYPE
+        fqcn = f'{self.__class__.__module__}.{self.__class__.__qualname__}'
+        return fqcn == scope
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
@@ -210,7 +352,11 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
     def deserialize(cls, obj, allowed_meta: set[str]):
         '''method used as pydantic `validator`'''
         if isinstance(obj, cls):
-            obj.init_meta(allowed_meta)
+            if cls.meta_checks_enabled():
+                obj.init_meta(allowed_meta)
+            return obj
+
+        if isinstance(obj, Reference):
             return obj
 
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}

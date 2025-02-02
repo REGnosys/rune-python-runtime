@@ -72,10 +72,10 @@ def test_extended_type_polymorphic():
 @pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
 def test_at_type():
     '''no doc'''
-    from serialization.test.extension.Root import Root
     from serialization.test.extension.B import B
     json_str = '''
         {
+            "@type": "serialization.test.extension.Root",
             "typeA" : {
                 "fieldA" : "bar",
                 "fieldB" : "foo",
@@ -83,8 +83,8 @@ def test_at_type():
             }
         }
     '''
-    model = Root.model_validate_json(json_str)
-    # assert isinstance(model.typeA, B)
+    model = BaseDataClass.rune_deserialize(json_str)
+    assert isinstance(model.typeA, B)
 
 
 @pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')

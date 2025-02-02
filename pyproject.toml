@@ -10,7 +10,8 @@ dependencies = [
    "pydantic>=2.10.3"
 ]
 optional-dependencies.dev = [
-    "pytest"
+    "pytest",
+    "pytest-mock"
 ]
 description = "rune-runtime: the Rune DSL runtime for Python"
 readme = "README.md"
