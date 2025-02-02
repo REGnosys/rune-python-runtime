@@ -74,7 +74,6 @@ class KeyType(Enum):
 
 class Reference:
     '''manages a reference to a object with a key'''
-
     def __init__(self,
                  target: str | Any,
                  ext_key: str | None = None,
@@ -96,8 +95,6 @@ class Reference:
             self.target_key = target
             self.key_type = key_type
             self.target = parent.get_object_by_key(target, key_type)
-            # self.target_key = target
-            # self.target, self.ref_type = get_object(self.target_key)
 
     def get_reference(self, _):
         '''returns itself reference'''
@@ -117,6 +114,7 @@ class UnresolvedReference:
 
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
+    _DEFAULT_SCOPE_TYPE = 'cdm.event.common.TradeState.TradeState'
     __meta_check_disabled = False
 
     @classmethod
@@ -207,11 +205,8 @@ class BaseMetaDataMixin:
         '''retrieve an object with a key an key type'''
         return self._get_object_map(key_type)[key]
 
-    def bind_property_to(self, property_nm: str, ref: str | Any):
+    def bind_property_to(self, property_nm: str, ref: Reference):
         '''set the property to reference the object referenced by the key'''
-        if not isinstance(ref, Reference):
-            ref = Reference(ref)
-
         allowed_ref_types = getattr(self, '_KEY_REF_CONSTRAINTS', {})
         if ref.key_type.rune_ref_tag not in allowed_ref_types.get(
                 property_nm, {}):
@@ -260,7 +255,11 @@ class BaseMetaDataMixin:
     def _create_unresolved_ref(cls, metadata) -> UnresolvedReference | None:
         if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
             if len(ref) != 1:
-                raise ValueError(f'Multiple references found: {ref}!')
+                ref.pop(KeyType.INTERNAL.rune_ref_tag, None)
+                if len(ref) != 1:
+                    ref.pop(KeyType.EXTERNAL.rune_ref_tag, None)
+                    if len(ref) != 1:
+                        raise ValueError(f'Multiple references found: {ref}!')
             return UnresolvedReference(ref)
         return None
 
@@ -273,13 +272,22 @@ class BaseMetaDataMixin:
         self.__dict__[PARENT_PROP] = parent
         if obj_maps := self.__dict__.pop(RUNE_OBJ_MAPS, None):
             # pylint: disable=protected-access
-            parent._update_object_maps(obj_maps)
+            self._update_object_maps(obj_maps)
+
+    def _extract_scoped_map(self, maps):
+        scoped = None
+        if self.is_scope_instance():
+            scoped = maps.pop(KeyType.SCOPED, None)
+        return scoped, maps
 
     def _update_object_maps(self, new_maps):
         if parent := self.get_rune_parent():
+            scoped, reduced_maps = self._extract_scoped_map(new_maps)
             # pylint: disable=protected-access
-            parent._update_object_maps(new_maps)
-            return
+            parent._update_object_maps(reduced_maps)
+            if not scoped:
+                return
+            new_maps = {KeyType.SCOPED: scoped}
 
         obj_maps = self.__dict__.setdefault(RUNE_OBJ_MAPS, {})
         for map_type, new_map in new_maps.items():
@@ -298,6 +306,27 @@ class BaseMetaDataMixin:
     def remove_rune_ref(self, name):
         '''remove a reference'''
         return self.__dict__[REFS_CONTAINER].pop(name)
+
+    @classmethod
+    @lru_cache
+    def _get_rune_scope_type(cls):
+        ''' Attempt to obtain the name of the rune scoping type,
+            in case of a failure, None will be returned.
+        '''
+        try:
+            module = importlib.import_module(
+                cls.__module__.split('.', maxsplit=1)[0])
+            return getattr(module, 'rune_scope_type', default=None)
+        # pylint: disable=bare-except
+        except:  # noqa
+            return None
+
+    def is_scope_instance(self):
+        '''is this object a scope for `scoped` keys/references'''
+        if not (scope := self._get_rune_scope_type()):
+            scope = self._DEFAULT_SCOPE_TYPE
+        fqcn = f'{self.__class__.__module__}.{self.__class__.__qualname__}'
+        return fqcn == scope
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):

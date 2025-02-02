@@ -99,7 +99,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         rune_dict.pop('@model', None)
         rune_cls = cls._type_to_cls(rune_dict)
         model = rune_cls.model_validate(rune_dict)
-        # model.resolve_references()
         model.validate_model()
         return model
 

@@ -22,11 +22,19 @@ type Root:
     attributeRef AttributeRef (0..1)
 '''
 import datetime
+import json
 from typing_extensions import Annotated, Optional
 import pytest
 from pydantic import Field
 from rune.runtime.base_data_class import BaseDataClass
 from rune.runtime.metadata import DateWithMeta
+try:
+    # pylint: disable=unused-import
+    # type: ignore
+    import serialization  # noqa
+    NO_SER_TEST_MOD = False
+except ImportError:
+    NO_SER_TEST_MOD = True
 
 
 class A(BaseDataClass):
@@ -59,11 +67,13 @@ class AttributeRef(BaseDataClass):
     dateField: Optional[Annotated[  # type: ignore
         DateWithMeta,
         DateWithMeta.serializer(),
-        DateWithMeta.validator(('@key', ))]] = Field(None, description='')
+        DateWithMeta.validator(
+            ('@key', '@key:external'))]] = Field(None, description='')
     dateReference: Optional[Annotated[  # type: ignore
         DateWithMeta,
         DateWithMeta.serializer(),
-        DateWithMeta.validator(('@ref', ))]] = Field(None, description='')
+        DateWithMeta.validator(
+            ('@ref', '@ref:external'))]] = Field(None, description='')
 
     _KEY_REF_CONSTRAINTS = {
         'dateReference': {'@ref', '@ref:external'}
@@ -85,10 +95,12 @@ def test_attribute_ref():
             "attributeRef" : {
                 "dateField" : {
                     "@data" : "2024-12-12",
-                    "@key" : "someKey"
+                    "@key" : "someKey",
+                    "@key:external" : "someExternalKey"
                 },
                 "dateReference" : {
-                    "@ref" : "someKey"
+                    "@ref" : "someKey",
+                    "@ref:external" : "someExternalKey"                
                 }
             }
         }
@@ -153,5 +165,94 @@ def test_dangling_node_ref():
     '''
     with pytest.raises(KeyError):
         Root.model_validate_json(json_str)
+
+
+@pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
+def test_generated_attribute_ref():
+    '''attribute-ref.json'''
+    json_str = '''{
+        "@model": "serialization",
+        "@type": "serialization.test.metakey.Root",
+        "@version": "0.0.0",
+        "attributeRef": {
+            "dateField": {
+                "@data": "2024-12-12",
+                "@key": "someKey",
+                "@key:external": "someExternalKey"
+            },
+            "dateReference": {
+                "@ref": "someKey",
+                "@ref:external": "someExternalKey"
+            }
+        }
+    }'''
+    model = BaseDataClass.rune_deserialize(json_str)
+    resp_json = model.rune_serialize()
+    org_dict = json.loads(json_str)
+    org_dict['attributeRef']['dateReference'].pop('@ref')
+    assert json.loads(resp_json) == org_dict
+
+
+@pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
+def test_generated_node_ref():
+    '''attribute-ref.json'''
+    json_str = '''{
+        "@model": "serialization",
+        "@type": "serialization.test.metakey.Root",
+        "@version": "0.0.0",
+        "nodeRef": {
+            "typeA": {
+                "fieldA": "foo",
+                "@key": "someKey",
+                "@key:external": "someExternalKey"
+            },
+            "aReference": {
+                "@ref": "someKey",
+                "@ref:external": "someExternalKey"
+            }
+        }
+    }'''
+    model = BaseDataClass.rune_deserialize(json_str)
+    resp_json = model.rune_serialize()
+    org_dict = json.loads(json_str)
+    org_dict['nodeRef']['aReference'].pop('@ref')
+    assert json.loads(resp_json) == org_dict
+
+
+@pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
+def test_generated_dangling_node_ref():
+    '''attribute-ref.json'''
+    json_str = '''{
+        "@model": "serialization",
+        "@type": "serialization.test.metakey.Root",
+        "@version": "0.0.0",
+        "nodeRef": {
+            "aReference": {
+                "@ref": "someKey",
+                "@ref:external": "someExternalKey"
+            }
+        }
+    }'''
+    with pytest.raises(KeyError):
+        BaseDataClass.rune_deserialize(json_str)
+
+
+
+@pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
+def test_generated_dangling_attribute_ref():
+    '''attribute-ref.json'''
+    json_str = '''{
+        "@model": "serialization",
+        "@type": "serialization.test.metakey.Root",
+        "@version": "0.0.0",
+        "attributeRef": {
+            "dateReference": {
+                "@ref": "someKey",
+                "@ref:external": "someExternalKey"
+            }
+        }
+    }'''
+    with pytest.raises(KeyError):
+        BaseDataClass.rune_deserialize(json_str)
 
 # EOF

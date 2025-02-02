@@ -35,6 +35,14 @@ class DeepRef(BaseDataClass):
                     Root.validator()] = Field(..., description='')
 
 
+class DeepRef2(BaseDataClass):
+    '''no doc'''
+    root: Annotated[Root, Root.serializer(),
+                    Root.validator()] = Field(..., description='')
+    root2: Annotated[Root, Root.serializer(),
+                    Root.validator()] = Field(..., description='')
+
+
 def test_root_creation():
     '''no doc'''
     b = B(fieldB='some b content')
@@ -61,6 +69,32 @@ def test_deep_creation():
     assert deep.root.typeA == deep.root.typeA.b.get_rune_parent()
     assert deep.root.typeA == deep.root.bAddress.get_rune_parent()
     assert deep.root.typeA.b == deep.root.bAddress
+
+
+def test_deep2_creation(mocker):
+    '''no doc'''
+    mocker.patch('rune.runtime.metadata.BaseMetaDataMixin._DEFAULT_SCOPE_TYPE',
+                 'test_rune_parent.Root')
+    b = B(fieldB='some b content')
+    a = A(b=b)
+    b2 = B(fieldB='2 some other b content')
+    a2 = A(b=b2)
+    root = Root(typeA=a, bAddress=Reference(a.b, 'aKey3', KeyType.SCOPED))
+    root2 = Root(typeA=a2, bAddress=Reference(a2.b, 'aKey3', KeyType.SCOPED))
+    deep = DeepRef2(root=root, root2=root2)
+    # pylint: disable=no-member
+    assert deep.get_rune_parent() is None
+    assert deep == deep.root.get_rune_parent()
+    assert deep.root == deep.root.typeA.get_rune_parent()
+    assert deep.root.typeA == deep.root.typeA.b.get_rune_parent()
+    assert deep.root.typeA == deep.root.bAddress.get_rune_parent()
+    assert deep.root.typeA.b == deep.root.bAddress
+
+    assert deep == deep.root2.get_rune_parent()
+    assert deep.root2 == deep.root2.typeA.get_rune_parent()
+    assert deep.root2.typeA == deep.root2.typeA.b.get_rune_parent()
+    assert deep.root2.typeA == deep.root2.bAddress.get_rune_parent()
+    assert deep.root2.typeA.b == deep.root2.bAddress
 
 
 def test_root_deserialization():
