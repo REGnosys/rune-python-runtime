@@ -77,21 +77,26 @@ class Reference:
     def __init__(self,
                  target: str | Any,
                  ext_key: str | None = None,
-                 key_type: KeyType = KeyType.EXTERNAL,
+                 key_type: KeyType | None = None,
                  parent=None):
         if not isinstance(target, BaseMetaDataMixin) and ext_key:
             raise ValueError('Need to pass an object as target when specifying '
                              'an external key!')
         if ext_key:
+            key_type = key_type or KeyType.EXTERNAL
             target.set_external_key(ext_key, key_type)  # type: ignore
             self.target = target
             self.target_key = ext_key
             self.key_type = key_type
         elif isinstance(target, BaseMetaDataMixin):
+            if key_type and key_type != KeyType.INTERNAL:
+                raise ValueError('key_type should be None or INTERNAL when '
+                                 'passing in an object without a key!')
             self.target = target
             self.target_key = target.get_or_create_key()
             self.key_type = KeyType.INTERNAL
         else:
+            key_type = key_type or KeyType.EXTERNAL
             self.target_key = target
             self.key_type = key_type
             self.target = parent.get_object_by_key(target, key_type)
