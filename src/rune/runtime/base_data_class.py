@@ -77,8 +77,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         indent: int | None = None,
         include: IncEx | None = None,
         exclude: IncEx | None = None,
-        context: Any | None = None,
-        by_alias: bool = False,
         exclude_unset: bool = True,
         exclude_defaults: bool = True,
         exclude_none: bool = False,
@@ -109,12 +107,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
 
             `exclude (IncEx | None, optional):` Field(s) to exclude from the
             JSON output. Defaults to None.
-
-            `context (Any | None, optional):` Additional context to pass to the
-            serializer. Defaults to None.
-
-            `by_alias (bool, optional):` Whether to serialize using field
-            aliases. Defaults to False.
 
             `exclude_unset (bool, optional):` Whether to exclude fields that
             have not been explicitly set. Defaults to True.
@@ -154,8 +146,6 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             return self.model_dump_json(indent=indent,
                                         include=include,
                                         exclude=exclude,
-                                        context=context,
-                                        by_alias=by_alias,
                                         exclude_unset=exclude_unset,
                                         exclude_defaults=exclude_defaults,
                                         exclude_none=exclude_none,
