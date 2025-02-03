@@ -71,9 +71,9 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     def rune_serialize(
         self,
         *,
-        validate_model=True,
-        strict=True,
-        raise_validation_errors=True,
+        validate_model: bool = True,
+        strict: bool = True,
+        raise_validation_errors: bool = True,
         indent: int | None = None,
         include: IncEx | None = None,
         exclude: IncEx | None = None,
@@ -137,9 +137,9 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     @classmethod
     def rune_deserialize(cls,
                          rune_json: str,
-                         validate_model=True,
-                         strict=True,
-                         raise_validation_errors=True) -> BaseModel:
+                         validate_model: bool = True,
+                         strict: bool = True,
+                         raise_validation_errors: bool = True) -> BaseModel:
         # pylint: disable=line-too-long
         '''Rune compliant deserialization
 
