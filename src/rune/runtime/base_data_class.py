@@ -130,7 +130,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             with duck-typing serialization behavior. Defaults to False.
 
         #### Returns:
-            `str:` A Rune conform JSON string representation of the model.
+            `str:` A Rune conforming JSON string representation of the model.
         '''
         try:
             if validate_model:
