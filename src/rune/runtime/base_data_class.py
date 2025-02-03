@@ -86,27 +86,58 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         warnings: bool | Literal['none', 'warn', 'error'] = True,
         serialize_as_any: bool = False,
     ) -> str:
-        # pylint: disable=line-too-long
-        '''Rune conform serialization to json string. To be invoked on the
-            model root.
+        '''Rune conform serialization to json string. To be invoked on the model
+        root.
 
-        ### Args:
-            `validate_model (bool, optional):` Validate the model prior serialization. It checks also all Rune type constraints. Defaults to True.
-            `strict (bool, optional):` Perform strict attribute validation. Defaults to True.
-            `raise_validation_errors (bool, optional):` Raise an exception in case a validation error has occurred. Defaults to True.
-            `indent (int | None, optional):` Indentation to use in the JSON output. If None is passed, the output will be compact. Defaults to None.
-            `include (IncEx | None, optional):` Field(s) to include in the JSON output. Defaults to None.
-            `exclude (IncEx | None, optional):` Field(s) to exclude from the JSON output. Defaults to None.
-            `context (Any | None, optional):` Additional context to pass to the serializer. Defaults to None.
-            `by_alias (bool, optional):` Whether to serialize using field aliases. Defaults to False.
-            `exclude_unset (bool, optional):` Whether to exclude fields that have not been explicitly set. Defaults to True.
-            `exclude_defaults (bool, optional):` Whether to exclude fields that are set to their default value. Defaults to True.
-            `exclude_none (bool, optional):` Whether to exclude fields that have a value of `None`. Defaults to False.
-            `round_trip (bool, optional):` If True, dumped values should be valid as input for non-idempotent types such as Json[T]. Defaults to False.
-            `warnings (bool | Literal['none', 'warn', 'error'], optional):` How to handle serialization errors. False/"none" ignores them, True/"warn" logs errors, "error" raises a [`PydanticSerializationError`][pydantic_core.PydanticSerializationError]. Defaults to True.
-            `serialize_as_any (bool, optional):` _description_. Defaults to False.
+        #### Args:
+            `validate_model (bool, optional):` Validate the model prior
+            serialization. It checks also all Rune type constraints.
+            Defaults to True.
 
-        ### Returns:
+            `strict (bool, optional):` Perform strict attribute validation. 
+            Defaults to True.
+
+            `raise_validation_errors (bool, optional):` Raise an exception in
+            case a validation error has occurred. Defaults to True.
+
+            `indent (int | None, optional):` Indentation to use in the JSON
+            output. If None is passed, the output will be compact. Defaults to
+            None.
+
+            `include (IncEx | None, optional):` Field(s) to include in the JSON
+            output. Defaults to None.
+
+            `exclude (IncEx | None, optional):` Field(s) to exclude from the
+            JSON output. Defaults to None.
+
+            `context (Any | None, optional):` Additional context to pass to the
+            serializer. Defaults to None.
+
+            `by_alias (bool, optional):` Whether to serialize using field
+            aliases. Defaults to False.
+
+            `exclude_unset (bool, optional):` Whether to exclude fields that
+            have not been explicitly set. Defaults to True.
+
+            `exclude_defaults (bool, optional):` Whether to exclude fields that
+            are set to their default value. Defaults to True.
+
+            `exclude_none (bool, optional):` Whether to exclude fields that have
+            a value of `None`. Defaults to False.
+
+            `round_trip (bool, optional):` If True, dumped values should be
+            valid as input for non-idempotent types such as Json[T]. Defaults to
+            False.
+
+            `warnings (bool | Literal['none', 'warn', 'error'], optional):` How
+            to handle serialization errors. False/"none" ignores them,
+            True/"warn" logs errors, "error" raises a
+            `PydanticSerializationError`. Defaults to True.
+
+            `serialize_as_any (bool, optional):` Whether to serialize fields
+            with duck-typing serialization behavior. Defaults to False.
+
+        #### Returns:
             `str:` A Rune conform JSON string representation of the model.
         '''
         try:
@@ -143,13 +174,20 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         # pylint: disable=line-too-long
         '''Rune compliant deserialization
 
-        ### Args:
+        #### Args:
             `rune_json (str):` A JSON string.
-            `validate_model (bool, optional):` Validate the model after deserialization. It checks also all Rune type constraints. Defaults to True.
-            `strict (bool, optional):` Perform strict attribute validation. Defaults to True.
-            `raise_validation_errors (bool, optional):` Raise an exception in case a validation error has occurred. Defaults to True.
 
-        ### Returns:
+            `validate_model (bool, optional):` Validate the model after
+            deserialization. It checks also all Rune type constraints. Defaults
+            to True.
+
+            `strict (bool, optional):` Perform strict attribute validation.
+            Defaults to True.
+
+            `raise_validation_errors (bool, optional):` Raise an exception in
+            case a validation error has occurred. Defaults to True.
+
+        #### Returns:
             `BaseModel:` The Rune model.
         '''
         rune_dict = json.loads(rune_json)
