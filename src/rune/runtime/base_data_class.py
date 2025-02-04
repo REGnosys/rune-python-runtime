@@ -2,11 +2,11 @@
 import logging
 import importlib
 import json
-from typing import get_args, get_origin, Any
+from typing import get_args, get_origin, Any, Literal
 from typing_extensions import Self
 from pydantic import (BaseModel, ValidationError, ConfigDict, model_serializer,
                       model_validator, ModelWrapValidatorHandler)
-
+from pydantic.main import IncEx
 from rune.runtime.conditions import ConditionViolationError
 from rune.runtime.conditions import get_conditions
 from rune.runtime.metadata import (ComplexTypeMetaDataMixin, Reference,
@@ -68,16 +68,74 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         obj.resolve_references()
         return obj
 
-    def rune_serialize(self,
-                       *,
-                       exclude_unset: bool = True,
-                       exclude_defaults: bool = True,
-                       **kwargs) -> str:
-        ''' Rune conform serialization to json string. To be invoked on the
-            model root.
+    def rune_serialize(
+        self,
+        *,
+        validate_model: bool = True,
+        strict: bool = True,
+        raise_validation_errors: bool = True,
+        indent: int | None = None,
+        include: IncEx | None = None,
+        exclude: IncEx | None = None,
+        exclude_unset: bool = True,
+        exclude_defaults: bool = True,
+        exclude_none: bool = False,
+        round_trip: bool = False,
+        warnings: bool | Literal['none', 'warn', 'error'] = True,
+        serialize_as_any: bool = False,
+    ) -> str:
+        '''Rune conform serialization to json string. To be invoked on the model
+        root.
+
+        #### Args:
+            `validate_model (bool, optional):` Validate the model prior
+            serialization. It checks also all Rune type constraints.
+            Defaults to True.
+
+            `strict (bool, optional):` Perform strict attribute validation. 
+            Defaults to True.
+
+            `raise_validation_errors (bool, optional):` Raise an exception in
+            case a validation error has occurred. Defaults to True.
+
+            `indent (int | None, optional):` Indentation to use in the JSON
+            output. If None is passed, the output will be compact. Defaults to
+            None.
+
+            `include (IncEx | None, optional):` Field(s) to include in the JSON
+            output. Defaults to None.
+
+            `exclude (IncEx | None, optional):` Field(s) to exclude from the
+            JSON output. Defaults to None.
+
+            `exclude_unset (bool, optional):` Whether to exclude fields that
+            have not been explicitly set. Defaults to True.
+
+            `exclude_defaults (bool, optional):` Whether to exclude fields that
+            are set to their default value. Defaults to True.
+
+            `exclude_none (bool, optional):` Whether to exclude fields that have
+            a value of `None`. Defaults to False.
+
+            `round_trip (bool, optional):` If True, dumped values should be
+            valid as input for non-idempotent types such as Json[T]. Defaults to
+            False.
+
+            `warnings (bool | Literal['none', 'warn', 'error'], optional):` How
+            to handle serialization errors. False/"none" ignores them,
+            True/"warn" logs errors, "error" raises a
+            `PydanticSerializationError`. Defaults to True.
+
+            `serialize_as_any (bool, optional):` Whether to serialize fields
+            with duck-typing serialization behavior. Defaults to False.
+
+        #### Returns:
+            `str:` A Rune conforming JSON string representation of the model.
         '''
         try:
-            self.validate_model()
+            if validate_model:
+                self.validate_model(strict=strict,
+                                    raise_exc=raise_validation_errors)
 
             root_meta = self.__dict__.setdefault(ROOT_CONTAINER, {})
             root_meta['@type'] = self.__class__.__module__
@@ -85,21 +143,51 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                 '.', maxsplit=1)[0]
             root_meta['@version'] = self.get_model_version()
 
-            return self.model_dump_json(exclude_unset=exclude_unset,
+            return self.model_dump_json(indent=indent,
+                                        include=include,
+                                        exclude=exclude,
+                                        exclude_unset=exclude_unset,
                                         exclude_defaults=exclude_defaults,
-                                        **kwargs)
+                                        exclude_none=exclude_none,
+                                        round_trip=round_trip,
+                                        warnings=warnings,
+                                        serialize_as_any=serialize_as_any)
         finally:
             self.__dict__.pop(ROOT_CONTAINER)
 
     @classmethod
-    def rune_deserialize(cls, rune_json_str: str) -> BaseModel:
-        '''Rune compliant deserialization'''
-        rune_dict = json.loads(rune_json_str)
+    def rune_deserialize(cls,
+                         rune_json: str,
+                         validate_model: bool = True,
+                         strict: bool = True,
+                         raise_validation_errors: bool = True) -> BaseModel:
+        # pylint: disable=line-too-long
+        '''Rune compliant deserialization
+
+        #### Args:
+            `rune_json (str):` A JSON string.
+
+            `validate_model (bool, optional):` Validate the model after
+            deserialization. It checks also all Rune type constraints. Defaults
+            to True.
+
+            `strict (bool, optional):` Perform strict attribute validation.
+            Defaults to True.
+
+            `raise_validation_errors (bool, optional):` Raise an exception in
+            case a validation error has occurred. Defaults to True.
+
+        #### Returns:
+            `BaseModel:` The Rune model.
+        '''
+        rune_dict = json.loads(rune_json)
         rune_dict.pop('@version', None)
         rune_dict.pop('@model', None)
         rune_cls = cls._type_to_cls(rune_dict)
-        model = rune_cls.model_validate(rune_dict)
-        model.validate_model()
+        model = rune_cls.model_validate(rune_dict, strict=strict)
+        if validate_model:
+            model.validate_model(strict=strict,
+                                 raise_exc=raise_validation_errors)
         return model
 
     def init_rune_parent(self):
