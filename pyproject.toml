@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8", "wheel", "pytest-runner"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rune.runtime"
+dynamic = ["version"]
+requires-python = ">=3.11"
+dependencies = [
+   "pydantic>=2.10.3"
+]
+optional-dependencies.dev = [
+    "pytest",
+    "pytest-mock"
+]
+description = "rune-runtime: the Rune DSL runtime for Python"
+readme = "README.md"
+keywords = [
+    "rune",
+    "rune runtime",
+]
+license = { text = "APACHE 2.0" }
+authors = [
+    { name = "Daniel Schwartz" },
+    { name = "Plamen Neykov" },
+    { name = "Others (See AUTHORS)" }
+]
+classifiers = [
+    "Development Status :: 6 - Mature",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache 2.0 License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Rune DSL",
+    "Topic :: Software Development :: Rune DSL Runtime"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/rune/runtime/version.py"
