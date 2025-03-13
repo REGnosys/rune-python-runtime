@@ -95,11 +95,11 @@ def test_temp():
     {
         "nodeRef" : {
             "typeA" : {
-            "fieldA" : "foo",
-            "@key" : "someKey1x"
+                "fieldA" : "foo",
+                "@key" : "someKey1x"
             },
             "aReference" : {
-            "@ref" : "someKey1x"
+                "@ref" : "someKey1x"
             }
         }
     }

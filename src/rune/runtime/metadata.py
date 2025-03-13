@@ -350,7 +350,8 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         res = obj.serialise_meta()
         res |= obj.model_dump(exclude_unset=True, exclude_defaults=True)
         if cls != obj.__class__:
-            res = {'@type': obj.__class__.__module__} | res
+            # pylint: disable=protected-access
+            res = {'@type': obj._FQRTN} | res
         return res
 
     @classmethod

@@ -138,8 +138,8 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
                                     raise_exc=raise_validation_errors)
 
             root_meta = self.__dict__.setdefault(ROOT_CONTAINER, {})
-            root_meta['@type'] = self.__class__.__module__
-            root_meta['@model'] = self.__class__.__module__.split(
+            root_meta['@type'] = self._FQRTN
+            root_meta['@model'] = self._FQRTN.split(
                 '.', maxsplit=1)[0]
             root_meta['@version'] = self.get_model_version()
 
