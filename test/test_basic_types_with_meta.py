@@ -216,6 +216,29 @@ def test_dump_annotated_date_simple():
     assert json_str == '{"date":{"@data":"2024-10-10"}}'
 
 
+def test_dump_annotated_date_date():
+    '''test the annotated string'''
+    model = AnnotatedDateModel(date=date(2024, 10, 10))
+    json_str = model.model_dump_json(exclude_unset=True)
+    assert json_str == '{"date":{"@data":"2024-10-10"}}'
+
+    model = AnnotatedDateModel(date=DateWithMeta(date(2024, 10, 10)))
+    json_str = model.model_dump_json(exclude_unset=True)
+    assert json_str == '{"date":{"@data":"2024-10-10"}}'
+
+
+def test_annotated_date_fail():
+    '''test instantiation failure with an incorrect type'''
+    with pytest.raises(AttributeError):
+        AnnotatedDateModel(date=10)
+
+
+def test_date_with_meta_fail():
+    '''test instantiation failure with an incorrect type'''
+    with pytest.raises(ValueError):
+        DateWithMeta(10)
+
+
 def test_load_annotated_date_scheme():
     '''test the loading of annotated with a scheme strings'''
     scheme_json = '{"date":{"@data":"2024-10-10","@scheme":"http://fpml.org"}}'

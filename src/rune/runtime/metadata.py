@@ -6,7 +6,7 @@ import uuid
 from decimal import Decimal
 from typing import Any, Never, get_args
 import datetime
-from typing_extensions import Self
+from typing_extensions import Self, Tuple
 from pydantic import (PlainSerializer, PlainValidator, WrapValidator,
                       WrapSerializer)
 # from rune.runtime.object_registry import get_object
@@ -404,6 +404,17 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
 
 class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     '''holds the metadata associated with an instance'''
+    _INPUT_TYPES: Any | Tuple[Any, ...] = str  # to be overridden by subclasses
+    _OUTPUT_TYPE: Any = str  # to be overridden by subclasses
+    _JSON_OUTPUT = str | dict
+
+    @classmethod
+    def _check_type(cls, value):
+        if not isinstance(value, cls._INPUT_TYPES):
+            raise ValueError(f'{cls.__name__} can be instantiated only with '
+                             f'one of the following type(s): {cls._INPUT_TYPES},'
+                             f' however the value is of type {type(value)}')
+
     @classmethod
     def serialise(cls, obj, base_type) -> dict:
         '''used as serialisation method with pydantic'''
@@ -431,7 +442,7 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
     @lru_cache
     def serializer(cls):
         '''should return the validator for the specific class'''
-        ser_fn = partial(cls.serialise, base_type=str)
+        ser_fn = partial(cls.serialise, base_type=cls._OUTPUT_TYPE)
         return PlainSerializer(ser_fn, return_type=dict)
 
     @classmethod
@@ -440,15 +451,20 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
         '''default validator for the specific class'''
         allowed = set(allowed_meta)
         return WrapValidator(partial(cls.deserialize,
-                                     base_types=str,
+                                     base_types=cls._INPUT_TYPES,
                                      allowed_meta=allowed),
-                             json_schema_input_type=str | dict)
+                             json_schema_input_type=cls._JSON_OUTPUT)
 
 
 class DateWithMeta(datetime.date, BasicTypeMetaDataMixin):
     '''date with metadata'''
+    _INPUT_TYPES = (datetime.date, str)
+
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
-        ymd = datetime.date.fromisoformat(value).timetuple()[:3]
+        cls._check_type(value)
+        if isinstance(value, str):
+            value = datetime.date.fromisoformat(value)
+        ymd = value.timetuple()[:3]
         obj = datetime.date.__new__(cls, *ymd)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
@@ -456,33 +472,41 @@ class DateWithMeta(datetime.date, BasicTypeMetaDataMixin):
 
 class TimeWithMeta(datetime.time, BasicTypeMetaDataMixin):
     '''annotated time'''
+    _INPUT_TYPES = (datetime.time, str)
+
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
-        aux = datetime.time.fromisoformat(value)
+        cls._check_type(value)
+        if isinstance(value, str):
+            value = datetime.time.fromisoformat(value)
         obj = datetime.time.__new__(cls,
-                                    aux.hour,
-                                    aux.minute,
-                                    aux.second,
-                                    aux.microsecond,
-                                    aux.tzinfo,
-                                    fold=aux.fold)
+                                    value.hour,
+                                    value.minute,
+                                    value.second,
+                                    value.microsecond,
+                                    value.tzinfo,
+                                    fold=value.fold)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
 
 class DateTimeWithMeta(datetime.datetime, BasicTypeMetaDataMixin):
     '''annotated datetime'''
+    _INPUT_TYPES = (datetime.datetime, str)
+
     def __new__(cls, value, **kwds):  # pylint: disable=signature-differs
-        aux = datetime.datetime.fromisoformat(value)
+        cls._check_type(value)
+        if isinstance(value, str):
+            value = datetime.datetime.fromisoformat(value)
         obj = datetime.datetime.__new__(cls,
-                                        aux.year,
-                                        aux.month,
-                                        aux.day,
-                                        aux.hour,
-                                        aux.minute,
-                                        aux.second,
-                                        aux.microsecond,
-                                        aux.tzinfo,
-                                        fold=aux.fold)
+                                        value.year,
+                                        value.month,
+                                        value.day,
+                                        value.hour,
+                                        value.minute,
+                                        value.second,
+                                        value.microsecond,
+                                        value.tzinfo,
+                                        fold=value.fold)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
@@ -500,31 +524,22 @@ class StrWithMeta(str, BasicTypeMetaDataMixin):
 
 class IntWithMeta(int, BasicTypeMetaDataMixin):
     '''annotated integer'''
+    _INPUT_TYPES = int
+    _OUTPUT_TYPE = int
+    _JSON_OUTPUT = int | dict
+
     def __new__(cls, value, **kwds):
         obj = int.__new__(cls, value)
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
-    @classmethod
-    @lru_cache
-    def serializer(cls):
-        '''should return the validator for the specific class'''
-        ser_fn = partial(cls.serialise, base_type=int)
-        return PlainSerializer(ser_fn, return_type=dict)
-
-    @classmethod
-    @lru_cache
-    def validator(cls, allowed_meta: tuple[str]):
-        '''default validator for the specific class'''
-        allowed = set(allowed_meta)
-        return WrapValidator(partial(cls.deserialize,
-                                     base_types=int,
-                                     allowed_meta=allowed),
-                             json_schema_input_type=int | dict)
-
 
 class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
     '''annotated number'''
+    _INPUT_TYPES = (Decimal, float, int, str)
+    _OUTPUT_TYPE = Decimal
+    _JSON_OUTPUT = float | int | str | dict
+
     def __new__(cls, value, **kwds):
         # NOTE: it could be necessary to convert the value to str if it is a
         # float
@@ -532,22 +547,22 @@ class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
-    @classmethod
-    @lru_cache
-    def serializer(cls):
-        '''should return the validator for the specific class'''
-        ser_fn = partial(cls.serialise, base_type=Decimal)
-        return PlainSerializer(ser_fn, return_type=dict)
+    # @classmethod
+    # @lru_cache
+    # def serializer(cls):
+    #     '''should return the validator for the specific class'''
+    #     ser_fn = partial(cls.serialise, base_type=Decimal)
+    #     return PlainSerializer(ser_fn, return_type=dict)
 
-    @classmethod
-    @lru_cache
-    def validator(cls, allowed_meta: tuple[str]):
-        '''default validator for the specific class'''
-        allowed = set(allowed_meta)
-        return WrapValidator(partial(cls.deserialize,
-                                     base_types=(Decimal, float, int, str),
-                                     allowed_meta=allowed),
-                             json_schema_input_type=float | int | str | dict)
+    # @classmethod
+    # @lru_cache
+    # def validator(cls, allowed_meta: tuple[str]):
+    #     '''default validator for the specific class'''
+    #     allowed = set(allowed_meta)
+    #     return WrapValidator(partial(cls.deserialize,
+    #                                  base_types=(Decimal, float, int, str),
+    #                                  allowed_meta=allowed),
+    #                          json_schema_input_type=float | int | str | dict)
 
 
 class _EnumWrapperDefaultVal(Enum):
