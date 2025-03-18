@@ -18,7 +18,7 @@ def test_base_type():
     '''no doc'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.extension.Root",
+        "@type": "serialization.test.passing.extension.Root",
         "@version": "0.0.0",
         "typeA": {
             "fieldA": "foo"
@@ -34,12 +34,12 @@ def test_extended_type_concrete():
     '''no doc'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.extension.Root",
+        "@type": "serialization.test.passing.extension.Root",
         "@version": "0.0.0",
         "typeB": {
             "fieldA": "foo",
             "fieldB": "foo",
-            "@type": "serialization.test.extension.B"
+            "@type": "serialization.test.passing.extension.B"
         }
     }'''
     model = BaseDataClass.rune_deserialize(json_str)
@@ -55,15 +55,15 @@ def test_extended_type_polymorphic():
     '''no doc'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.extension.Root",
+        "@type": "serialization.test.passing.extension.Root",
         "@version": "0.0.0",
         "typeA": {
             "fieldA": "bar",
             "fieldB": "foo",
-            "@type": "serialization.test.extension.B"
+            "@type": "serialization.test.passing.extension.B"
         }
     }'''
-    # import serialization.test.extension.Root
+    # import serialization.test.passing.extension.Root
     model = BaseDataClass.rune_deserialize(json_str)
     resp_json = model.rune_serialize()
     assert json.loads(resp_json) == json.loads(json_str)
@@ -72,14 +72,14 @@ def test_extended_type_polymorphic():
 @pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
 def test_at_type():
     '''no doc'''
-    from serialization.test.extension.B import B
+    from serialization.test.passing.extension.B import B
     json_str = '''
         {
-            "@type": "serialization.test.extension.Root",
+            "@type": "serialization.test.passing.extension.Root",
             "typeA" : {
                 "fieldA" : "bar",
                 "fieldB" : "foo",
-                "@type" : "serialization.test.extension.B"
+                "@type" : "serialization.test.passing.extension.B"
             }
         }
     '''
@@ -90,7 +90,7 @@ def test_at_type():
 @pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
 def test_temp():
     '''no doc'''
-    from serialization.test.metakey.Root import Root
+    from serialization.test.passing.metakey.Root import Root
     json_str = '''
     {
         "nodeRef" : {
@@ -112,7 +112,7 @@ def test_temp():
 @pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')
 def test_enums():
     '''no doc'''
-    from serialization.test.enumtypes.Root import Root
+    from serialization.test.passing.enumtypes.Root import Root
     json_str = '{"enumSingle":{"enumType":"A"}}'
     json_dict = json.loads(json_str)
     model1 = Root.model_validate(json_dict)

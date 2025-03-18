@@ -18,7 +18,7 @@ def test_address():
     '''no doc'''
     json_str = '''    {
         "@model": "serialization",
-        "@type": "serialization.test.metalocation.Root",
+        "@type": "serialization.test.passing.metalocation.Root",
         "@version": "0.0.0",
         "typeA": {
             "b": {

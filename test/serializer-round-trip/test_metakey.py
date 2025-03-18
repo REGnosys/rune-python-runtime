@@ -172,7 +172,7 @@ def test_generated_attribute_ref():
     '''attribute-ref.json'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.metakey.Root",
+        "@type": "serialization.test.passing.metakey.Root",
         "@version": "0.0.0",
         "attributeRef": {
             "dateField": {
@@ -198,7 +198,7 @@ def test_generated_node_ref():
     '''attribute-ref.json'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.metakey.Root",
+        "@type": "serialization.test.passing.metakey.Root",
         "@version": "0.0.0",
         "nodeRef": {
             "typeA": {
@@ -224,7 +224,7 @@ def test_generated_dangling_node_ref():
     '''attribute-ref.json'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.metakey.Root",
+        "@type": "serialization.test.passing.metakey.Root",
         "@version": "0.0.0",
         "nodeRef": {
             "aReference": {
@@ -243,7 +243,7 @@ def test_generated_dangling_attribute_ref():
     '''attribute-ref.json'''
     json_str = '''{
         "@model": "serialization",
-        "@type": "serialization.test.metakey.Root",
+        "@type": "serialization.test.passing.metakey.Root",
         "@version": "0.0.0",
         "attributeRef": {
             "dateReference": {

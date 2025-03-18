@@ -11,6 +11,7 @@ dependencies = [
 ]
 optional-dependencies.dev = [
     "pytest",
+    "pytest-cov",
     "pytest-mock"
 ]
 description = "rune-runtime: the Rune DSL runtime for Python"
