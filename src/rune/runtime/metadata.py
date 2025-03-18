@@ -1,14 +1,15 @@
 '''Classes representing annotated basic Rune types'''
-from enum import Enum
-import importlib
-from functools import partial, lru_cache
 import uuid
+import datetime
+import importlib
+from enum import Enum
+from functools import partial, lru_cache
 from decimal import Decimal
 from typing import Any, Never, get_args
-import datetime
 from typing_extensions import Self, Tuple
 from pydantic import (PlainSerializer, PlainValidator, WrapValidator,
                       WrapSerializer)
+from pydantic_core import PydanticCustomError
 # from rune.runtime.object_registry import get_object
 
 META_CONTAINER = '__rune_metadata'
@@ -365,6 +366,11 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         if isinstance(obj, Reference):
             return obj
 
+        if not isinstance(obj, dict):
+            raise PydanticCustomError('Input Validation Error',
+                                      'Expected either {my_type} or dict but '
+                                      'got {type}.',
+                                      {'type': type(obj), 'my_type': cls})
         metadata = {k: obj[k] for k in obj.keys() if k.startswith('@')}
 
         # References deserialization treatment
