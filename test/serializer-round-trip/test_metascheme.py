@@ -18,7 +18,7 @@ def test_enum_single():
     json_str = '''
         {
             "@model": "serialization",
-            "@type": "serialization.test.metascheme.Root",
+            "@type": "serialization.test.passing.metascheme.Root",
             "@version": "0.0.0",
             "enumType": {
                 "@data": "A",
@@ -37,7 +37,7 @@ def test_enum_list():
     json_str = '''
     {
         "@model": "serialization",
-        "@type": "serialization.test.metascheme.Root",
+        "@type": "serialization.test.passing.metascheme.Root",
         "@version": "0.0.0",
         "enumTypeList": [{
             "@data": "A",
