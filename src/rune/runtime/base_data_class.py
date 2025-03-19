@@ -72,6 +72,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         self,
         *,
         validate_model: bool = True,
+        check_rune_constraints: bool = True,
         strict: bool = True,
         raise_validation_errors: bool = True,
         indent: int | None = None,
@@ -91,6 +92,10 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             `validate_model (bool, optional):` Validate the model prior
             serialization. It checks also all Rune type constraints.
             Defaults to True.
+
+            `check_rune_constraints (bool, optional):` If `validate_model` is
+            set to `True`, executes all model defined Rune constraints after
+            deserialization. Defaults to True.
 
             `strict (bool, optional):` Perform strict attribute validation. 
             Defaults to True.
@@ -134,8 +139,10 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         '''
         try:
             if validate_model:
-                self.validate_model(strict=strict,
-                                    raise_exc=raise_validation_errors)
+                self.validate_model(
+                    check_rune_constraints=check_rune_constraints,
+                    strict=strict,
+                    raise_exc=raise_validation_errors)
 
             root_meta = self.__dict__.setdefault(ROOT_CONTAINER, {})
             root_meta['@type'] = self._FQRTN
@@ -159,6 +166,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
     def rune_deserialize(cls,
                          rune_json: str,
                          validate_model: bool = True,
+                         check_rune_constraints: bool = True,
                          strict: bool = True,
                          raise_validation_errors: bool = True) -> BaseModel:
         # pylint: disable=line-too-long
@@ -170,6 +178,10 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             `validate_model (bool, optional):` Validate the model after
             deserialization. It checks also all Rune type constraints. Defaults
             to True.
+
+            `check_rune_constraints (bool, optional):` If `validate_model` is
+            set to `True`, executes all model defined Rune constraints after
+            deserialization. Defaults to True.
 
             `strict (bool, optional):` Perform strict attribute validation.
             Defaults to True.
@@ -186,7 +198,8 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
         rune_cls = cls._type_to_cls(rune_dict)
         model = rune_cls.model_validate(rune_dict, strict=strict)
         if validate_model:
-            model.validate_model(strict=strict,
+            model.validate_model(check_rune_constraints=check_rune_constraints,
+                                 strict=strict,
                                  raise_exc=raise_validation_errors)
         return model
 
@@ -212,6 +225,7 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             self.bind_property_to(prop_nm, ref)
 
     def validate_model(self,
+                       check_rune_constraints=True,
                        recursively: bool = True,
                        raise_exc: bool = True,
                        strict: bool = True) -> list:
@@ -226,8 +240,10 @@ class BaseDataClass(BaseModel, ComplexTypeMetaDataMixin):
             self.disable_meta_checks()
             att_errors = self.validate_attribs(raise_exc=raise_exc,
                                                strict=strict)
-            return att_errors + self.validate_conditions(
-                recursively=recursively, raise_exc=raise_exc)
+            if check_rune_constraints:
+                att_errors.extend(self.validate_conditions(
+                    recursively=recursively, raise_exc=raise_exc))
+            return att_errors
         finally:
             self.enable_meta_checks()
 

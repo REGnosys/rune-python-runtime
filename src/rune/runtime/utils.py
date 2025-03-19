@@ -22,7 +22,7 @@ __all__ = [
 #     return eval(expr, globals(), {'self': obj})  # pylint: disable=eval-used
 
 
-def if_cond_fn(ifexpr, thenexpr: Callable, elseexpr: Callable) -> Any:
+def if_cond_fn(ifexpr: bool, thenexpr: Callable, elseexpr: Callable) -> Any:
     ''' A helper to return the value of the ternary operator
         (functional version).
     '''
