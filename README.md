@@ -15,7 +15,7 @@ Regardless, to install the package standalone:
 
 1. Fetch the latest release data from the GitHub API
 ```sh
-release_data=$(curl -s https://api.github.com/repos/CloudRisk/rune-python-runtime/releases/latest)
+release_data=$(curl -s https://api.github.com/repos/REGnosys/rune-python-runtime/releases/latest)
 ```
 2. Extract the download URL of the first asset
 ```sh
