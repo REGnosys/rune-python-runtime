@@ -105,7 +105,6 @@ def test_temp():
     }
     '''
     model = Root.model_validate_json(json_str)
-    model.resolve_references()
     assert id(model.nodeRef.typeA) == id(model.nodeRef.aReference)
 
 

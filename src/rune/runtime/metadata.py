@@ -12,6 +12,7 @@ from pydantic import (PlainSerializer, PlainValidator, WrapValidator,
 from pydantic_core import PydanticCustomError
 # from rune.runtime.object_registry import get_object
 
+DEFAULT_META = '_ALLOWED_METADATA'
 META_CONTAINER = '__rune_metadata'
 REFS_CONTAINER = '__rune_references'
 PARENT_PROP = '__rune_parent'
@@ -120,7 +121,7 @@ class UnresolvedReference:
 
 class BaseMetaDataMixin:
     '''Base class for the meta data support of basic amd complex types'''
-    _DEFAULT_SCOPE_TYPE = 'cdm.event.common.TradeState.TradeState'
+    _DEFAULT_SCOPE_TYPE = 'cdm.event.common.TradeState'
     __meta_check_disabled = False
 
     @classmethod
@@ -138,29 +139,13 @@ class BaseMetaDataMixin:
         '''is metadata checked during deserialize'''
         return not BaseMetaDataMixin.__meta_check_disabled
 
-    def _get_meta_container(self) -> dict[str, Any]:
-        return self.__dict__.get(META_CONTAINER, {})
-
-    def _check_props_allowed(self, props: dict[str, Any]):
-        if not props:
-            return
-        allowed = set(self._get_meta_container().keys())
-        prop_keys = set(props.keys())
-        if not prop_keys.issubset(allowed):
-            raise ValueError('Not allowed metadata provided: '
-                             f'{prop_keys - allowed}')
-
-    def init_meta(self, allowed_meta: set[str]):
-        ''' if not initialised, just creates empty meta slots. If the metadata
-            container is not empty, it will check if the already present keys
-            are conform to the allowed keys.
-        '''
-        meta = self.__dict__.setdefault(META_CONTAINER, {})
-        current_meta = set(meta.keys())
-        if not current_meta.issubset(allowed_meta):
-            raise ValueError(f'Allowed meta {allowed_meta} differs from the '
-                             f'currently existing meta slots: {current_meta}')
-        meta |= {k: None for k in allowed_meta - current_meta}
+    def is_scope_instance(self):
+        '''is this object a scope for `scoped` keys/references'''
+        if not (scope := self._get_rune_scope_type()):
+            scope = self._DEFAULT_SCOPE_TYPE
+        if not (fqcn := getattr(self, '_FQRTN', None)):
+            fqcn = f'{self.__class__.__module__}.{self.__class__.__qualname__}'
+        return fqcn == scope
 
     def set_meta(self, check_allowed=True, **kwds):
         '''set some/all metadata properties'''
@@ -211,7 +196,40 @@ class BaseMetaDataMixin:
         '''retrieve an object with a key an key type'''
         return self._get_object_map(key_type)[key]
 
-    def bind_property_to(self, property_nm: str, ref: Reference):
+    def get_rune_parent(self) -> Self | None:
+        '''the parent object'''
+        return self.__dict__.get(PARENT_PROP)
+
+    def _get_meta_container(self) -> dict[str, Any]:
+        return self.__dict__.get(META_CONTAINER, {})
+
+    def _merged_allowed_meta(self, allowed_meta: set[str]) -> set[str]:
+        default_meta = getattr(self, DEFAULT_META, set())
+        return set(allowed_meta) | default_meta
+
+    def _check_props_allowed(self, props: dict[str, Any]):
+        if not props:
+            return
+        allowed = self._merged_allowed_meta(self._get_meta_container().keys())
+        prop_keys = set(props.keys())
+        if not prop_keys.issubset(allowed):
+            raise ValueError('Not allowed metadata provided: '
+                             f'{prop_keys - allowed}')
+
+    def _init_meta(self, allowed_meta: set[str]):
+        ''' if not initialised, just creates empty meta slots. If the metadata
+            container is not empty, it will check if the already present keys
+            are conform to the allowed keys.
+        '''
+        allowed_meta = self._merged_allowed_meta(allowed_meta)
+        meta = self.__dict__.setdefault(META_CONTAINER, {})
+        current_meta = set(meta.keys())
+        if not current_meta.issubset(allowed_meta):
+            raise ValueError(f'Allowed meta {allowed_meta} differs from the '
+                             f'currently existing meta slots: {current_meta}')
+        meta |= {k: None for k in allowed_meta - current_meta}
+
+    def _bind_property_to(self, property_nm: str, ref: Reference):
         '''set the property to reference the object referenced by the key'''
         allowed_ref_types = getattr(self, '_KEY_REF_CONSTRAINTS', {})
         if ref.key_type.rune_ref_tag not in allowed_ref_types.get(
@@ -257,23 +275,7 @@ class BaseMetaDataMixin:
         # pylint: disable=protected-access
         return self.get_rune_parent()._get_object_map(key_type)  # type:ignore
 
-    @classmethod
-    def _create_unresolved_ref(cls, metadata) -> UnresolvedReference | None:
-        if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
-            if len(ref) != 1:
-                ref.pop(KeyType.INTERNAL.rune_ref_tag, None)
-                if len(ref) != 1:
-                    ref.pop(KeyType.EXTERNAL.rune_ref_tag, None)
-                    if len(ref) != 1:
-                        raise ValueError(f'Multiple references found: {ref}!')
-            return UnresolvedReference(ref)
-        return None
-
-    def get_rune_parent(self) -> Self | None:
-        '''the parent object'''
-        return self.__dict__.get(PARENT_PROP)
-
-    def set_rune_parent(self, parent: Self):
+    def _set_rune_parent(self, parent: Self):
         '''sets the parent object'''
         self.__dict__[PARENT_PROP] = parent
         if obj_maps := self.__dict__.pop(RUNE_OBJ_MAPS, None):
@@ -305,13 +307,25 @@ class BaseMetaDataMixin:
                                  f'Duplicated keys {dup_keys}')
             local_map |= new_map
 
-    def get_rune_refs_container(self):
+    def _get_rune_refs_container(self):
         '''return the dictionary of the refs held'''
         return self.__dict__.get(REFS_CONTAINER, {})
 
-    def remove_rune_ref(self, name):
+    def _remove_rune_ref(self, name):
         '''remove a reference'''
         return self.__dict__[REFS_CONTAINER].pop(name)
+
+    @classmethod
+    def _create_unresolved_ref(cls, metadata) -> UnresolvedReference | None:
+        if ref := {k: v for k, v in metadata.items() if k.startswith('@ref')}:
+            if len(ref) != 1:
+                ref.pop(KeyType.INTERNAL.rune_ref_tag, None)
+                if len(ref) != 1:
+                    ref.pop(KeyType.EXTERNAL.rune_ref_tag, None)
+                    if len(ref) != 1:
+                        raise ValueError(f'Multiple references found: {ref}!')
+            return UnresolvedReference(ref)
+        return None
 
     @classmethod
     @lru_cache
@@ -322,17 +336,10 @@ class BaseMetaDataMixin:
         try:
             module = importlib.import_module(
                 cls.__module__.split('.', maxsplit=1)[0])
-            return getattr(module, 'rune_scope_type', default=None)
+            return getattr(module, 'rune_scope_type', None)
         # pylint: disable=bare-except
         except:  # noqa
             return None
-
-    def is_scope_instance(self):
-        '''is this object a scope for `scoped` keys/references'''
-        if not (scope := self._get_rune_scope_type()):
-            scope = self._DEFAULT_SCOPE_TYPE
-        fqcn = f'{self.__class__.__module__}.{self.__class__.__qualname__}'
-        return fqcn == scope
 
 
 class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
@@ -360,7 +367,7 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         '''method used as pydantic `validator`'''
         if isinstance(obj, cls):
             if cls.meta_checks_enabled():
-                obj.init_meta(allowed_meta)
+                obj._init_meta(allowed_meta)  # pylint: disable=protected-access
             return obj
 
         if isinstance(obj, Reference):
@@ -387,7 +394,7 @@ class ComplexTypeMetaDataMixin(BaseMetaDataMixin):
         model = rune_cls.model_validate(obj)  # type: ignore
         model.__dict__[META_CONTAINER] = metadata
         if cls.meta_checks_enabled():
-            model.init_meta(allowed_meta)
+            model._init_meta(allowed_meta)  # pylint: disable=protected-access
 
         # Keys deserialization treatment
         model._register_keys(metadata)  # pylint: disable=protected-access
@@ -441,7 +448,7 @@ class BasicTypeMetaDataMixin(BaseMetaDataMixin):
             model = cls(data, **obj)  # type: ignore
             model._register_keys(obj)
         if cls.meta_checks_enabled():
-            model.init_meta(allowed_meta)
+            model._init_meta(allowed_meta)  # pylint: disable=protected-access
         return handler(model)
 
     @classmethod
@@ -553,23 +560,6 @@ class NumberWithMeta(Decimal, BasicTypeMetaDataMixin):
         obj.set_meta(check_allowed=False, **kwds)
         return obj
 
-    # @classmethod
-    # @lru_cache
-    # def serializer(cls):
-    #     '''should return the validator for the specific class'''
-    #     ser_fn = partial(cls.serialise, base_type=Decimal)
-    #     return PlainSerializer(ser_fn, return_type=dict)
-
-    # @classmethod
-    # @lru_cache
-    # def validator(cls, allowed_meta: tuple[str]):
-    #     '''default validator for the specific class'''
-    #     allowed = set(allowed_meta)
-    #     return WrapValidator(partial(cls.deserialize,
-    #                                  base_types=(Decimal, float, int, str),
-    #                                  allowed_meta=allowed),
-    #                          json_schema_input_type=float | int | str | dict)
-
 
 class _EnumWrapperDefaultVal(Enum):
     '''marker for not set value in enum wrapper'''
@@ -641,7 +631,7 @@ class EnumWithMetaMixin:
             model.set_meta(check_allowed=False, **obj)
             model._register_keys(obj)  # pylint: disable=protected-access
         if _EnumWrapper.meta_checks_enabled():
-            model.init_meta(allowed_meta)
+            model._init_meta(allowed_meta)  # pylint: disable=protected-access
         return model
 
     @classmethod

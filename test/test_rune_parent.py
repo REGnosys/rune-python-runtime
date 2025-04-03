@@ -1,7 +1,6 @@
 '''test module for rune root lifecycle'''
 from typing import Optional, Annotated
 from pydantic import Field
-import pytest
 from rune.runtime.metadata import Reference, KeyType
 from rune.runtime.base_data_class import BaseDataClass
 
@@ -29,8 +28,31 @@ class Root(BaseDataClass):
         'bAddress': {'@ref:scoped'}
     }
 
+
+class Bplus(BaseDataClass):
+    '''no doc'''
+    bAddress: Optional[Annotated[B,
+                                 B.serializer(),
+                                 B.validator(('@ref:scoped', ))]] = Field(
+                                     None, description='')
+
+    _KEY_REF_CONSTRAINTS = {
+        'bAddress': {'@ref:scoped'}
+    }
+
+
+class RootDeep(BaseDataClass):
+    '''no doc'''
+    typeA: Optional[Annotated[A, A.serializer(),
+                              A.validator()]] = Field(None, description='')
+    bplus: Optional[Annotated[Bplus,
+                              Bplus.serializer(),
+                              Bplus.validator()]] = Field(None, description='')
+
+
 class DeepRef(BaseDataClass):
     '''no doc'''
+    _FQRTN = 'test_rune_parent.DeepRef'
     root: Annotated[Root, Root.serializer(),
                     Root.validator()] = Field(..., description='')
 
@@ -100,15 +122,15 @@ def test_deep2_creation(mocker):
 def test_root_deserialization():
     '''no doc'''
     rune_dict = {
+        "bAddress": {
+            "@ref:scoped": "aKey3"
+        },
         "typeA": {
             "b": {
                 "@key:scoped": "aKey3",
                 "fieldB": "some b content"
             }
         },
-        "bAddress": {
-            "@ref:scoped": "aKey3"
-        }
     }
     root = Root.model_validate(rune_dict)
     assert root.get_rune_parent() is None
@@ -118,19 +140,48 @@ def test_root_deserialization():
     assert root.typeA.b == root.bAddress
 
 
+
+def test_root_deep_deserialization():
+    '''no doc'''
+    rune_dict = {
+        "bplus": {
+            "bAddress": {
+                "@ref:scoped": "aKey3"
+            }
+        },
+        "typeA": {
+            "b": {
+                "@key:scoped": "aKey3",
+                "fieldB": "some b content"
+            }
+        },
+        # "bplus": {
+        #     "bAddress": {
+        #         "@ref:scoped": "aKey3"
+        #     }
+        # },
+    }
+    root = RootDeep.rune_deserialize(rune_dict)
+    assert root.get_rune_parent() is None
+    assert root == root.typeA.get_rune_parent()
+    assert root.typeA == root.typeA.b.get_rune_parent()
+    assert root.typeA == root.bplus.bAddress.get_rune_parent()
+    assert root.typeA.b == root.bplus.bAddress
+
+
 def test_deep_deserialization():
     '''no doc'''
     rune_dict = {
         "root": {
+            "bAddress": {
+                "@ref:scoped": "aKey3"
+            },
             "typeA": {
                 "b": {
                     "@key:scoped": "aKey3",
                     "fieldB": "some b content"
                 }
             },
-            "bAddress": {
-                "@ref:scoped": "aKey3"
-            }
         }
     }
     deep = DeepRef.model_validate(rune_dict)
