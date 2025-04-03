@@ -11,11 +11,27 @@ from rune.runtime.metadata import NumberWithMeta, StrWithMeta
 
 class CashFlow(BaseDataClass):
     '''test cashflow'''
+    _ALLOWED_METADATA = {'@key', '@key:external'}
     currency: str = Field(...,
                           description='currency',
                           min_length=3,
                           max_length=3)
     amount: Decimal = Field(..., description='payment amount', ge=0)
+
+
+class CashFlowNoKey(BaseDataClass):
+    '''test cashflow'''
+    currency: str = Field(...,
+                          description='currency',
+                          min_length=3,
+                          max_length=3)
+    amount: Decimal = Field(..., description='payment amount', ge=0)
+
+
+class DummyLoanNoKey(BaseDataClass):
+    '''some more complex data structure'''
+    loan: CashFlowNoKey = Field(..., description='loaned amount')
+    repayment: CashFlowNoKey = Field(..., description='repaid amount')
 
 
 class DummyLoan(BaseDataClass):
@@ -124,7 +140,8 @@ def test_use_ref_from_key():
                        repayment=CashFlow(currency='EUR', amount=101))
     key = model.loan.get_or_create_key()  # pylint: disable=no-member
     ref = Reference(key, key_type=KeyType.INTERNAL, parent=model)
-    model.bind_property_to('repayment', ref)
+    # pylint: disable=protected-access
+    model._bind_property_to('repayment', ref)
     assert id(model.loan) == id(model.repayment)
 
 
@@ -132,14 +149,15 @@ def test_use_ref_from_object():
     '''test use a ref'''
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
                        repayment=CashFlow(currency='EUR', amount=101))
-    model.bind_property_to('repayment', Reference(model.loan))
+    # pylint: disable=protected-access
+    model._bind_property_to('repayment', Reference(model.loan))
     assert id(model.loan) == id(model.repayment)
 
 
 def test_bad_key_generation():
     '''generate a key for an object which can't be referenced'''
-    model = DummyLoan(loan=CashFlow(currency='EUR', amount=100),
-                      repayment=CashFlow(currency='EUR', amount=101))
+    model = DummyLoanNoKey(loan=CashFlowNoKey(currency='EUR', amount=100),
+                           repayment=CashFlowNoKey(currency='EUR', amount=101))
     with pytest.raises(ValueError):
         model.loan.get_or_create_key()  # pylint: disable=no-member
 
@@ -152,7 +170,8 @@ def test_invalid_property():
                         repayment=CashFlow(currency='EUR', amount=101))
 
     with pytest.raises(ValueError):
-        model.bind_property_to('repayment', Reference(model2.loan))
+        # pylint: disable=protected-access
+        model._bind_property_to('repayment', Reference(model2.loan))
 
 
 def test_ref_assign():
@@ -160,6 +179,13 @@ def test_ref_assign():
     model = DummyLoan2(loan=CashFlow(currency='EUR', amount=100),
                        repayment=CashFlow(currency='EUR', amount=101))
     model.repayment = Reference(model.loan)
+    assert id(model.loan) == id(model.repayment)
+
+
+def test_ref_in_constructor():
+    '''test use a ref'''
+    cf = CashFlow(currency='EUR', amount=100)
+    model = DummyLoan2(loan=cf, repayment=Reference(cf))
     assert id(model.loan) == id(model.repayment)
 
 
@@ -259,7 +285,6 @@ def test_load_loan_with_key_ref():
         "repayment":{"@ref":"cf-1-2"}
     }'''
     model = DummyLoan2.model_validate_json(json_str)
-    model.resolve_references()
     assert id(model.loan) == id(model.repayment)
 
 
@@ -270,7 +295,6 @@ def test_load_basic_type_loan_with_key_ref():
         "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131c"}
     }'''
     model = DummyLoan3.model_validate_json(json_str)
-    model.resolve_references()
     assert id(model.loan) == id(model.repayment)
 
 
@@ -281,7 +305,6 @@ def test_load_basic_type_loan_with_key_ref_and_constraints():
         "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131a"}
     }'''
     model = DummyLoan4.model_validate_json(json_str)
-    model.resolve_references()
     model.validate_model()
     assert id(model.loan) == id(model.repayment)
 
@@ -293,7 +316,6 @@ def test_load_basic_type_loan_with_key_ref_and_broken_constraints():
         "repayment":{"@ref":"8e50b68b-6426-44a8-bbfd-cbe3b833131b"}
     }'''
     model = DummyLoan4.model_validate_json(json_str)
-    model.resolve_references()
     with pytest.raises(ValidationError):
         model.validate_model()
 

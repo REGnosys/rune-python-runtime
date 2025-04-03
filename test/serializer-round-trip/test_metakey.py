@@ -106,7 +106,6 @@ def test_attribute_ref():
         }
     '''
     model = Root.model_validate_json(json_str)
-    model.resolve_references()
     model.validate_model()
     assert model.attributeRef.dateField == datetime.date(2024, 12, 12)
     assert model.attributeRef.dateReference == datetime.date(2024, 12, 12)
@@ -130,7 +129,6 @@ def test_node_ref():
         }
     '''
     model = Root.model_validate_json(json_str)
-    model.resolve_references()
     model.validate_model()
     assert model.nodeRef.typeA.fieldA == 'foo'
     assert model.nodeRef.aReference.fieldA == 'foo'
@@ -149,7 +147,7 @@ def test_dangling_attribute_ref():
         }
     '''
     with pytest.raises(KeyError):
-        Root.model_validate_json(json_str)
+        Root.rune_deserialize(json_str)
 
 
 def test_dangling_node_ref():
@@ -164,7 +162,7 @@ def test_dangling_node_ref():
         }
     '''
     with pytest.raises(KeyError):
-        Root.model_validate_json(json_str)
+        Root.rune_deserialize(json_str)
 
 
 @pytest.mark.skipif(NO_SER_TEST_MOD, reason='Generated test package not found')

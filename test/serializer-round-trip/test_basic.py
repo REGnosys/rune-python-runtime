@@ -104,7 +104,6 @@ def test_basic_types_single():
         }
     '''
     model = Root.model_validate_json(json_str)
-    model.resolve_references()
     model.validate_model()
 
 
@@ -123,7 +122,6 @@ def test_basic_types_list():
         }
     '''
     model = Root.model_validate_json(json_str)
-    model.resolve_references()
     model.validate_model()
 
 # EOF
