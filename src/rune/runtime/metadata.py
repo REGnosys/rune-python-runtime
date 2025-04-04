@@ -5,7 +5,7 @@ import importlib
 from enum import Enum
 from functools import partial, lru_cache
 from decimal import Decimal
-from typing import Any, Never, get_args
+from typing import Any, Never, get_args, Iterable
 from typing_extensions import Self, Tuple
 from pydantic import (PlainSerializer, PlainValidator, WrapValidator,
                       WrapSerializer)
@@ -17,6 +17,10 @@ META_CONTAINER = '__rune_metadata'
 REFS_CONTAINER = '__rune_references'
 PARENT_PROP = '__rune_parent'
 RUNE_OBJ_MAPS = '__rune_object_maps'
+
+
+def _replaceable(prop):
+    return isinstance(prop, (BaseMetaDataMixin, UnresolvedReference, Reference))
 
 
 def _py_to_ser_key(key: str) -> str:
@@ -203,8 +207,9 @@ class BaseMetaDataMixin:
     def _get_meta_container(self) -> dict[str, Any]:
         return self.__dict__.get(META_CONTAINER, {})
 
-    def _merged_allowed_meta(self, allowed_meta: set[str]) -> set[str]:
-        default_meta = getattr(self, DEFAULT_META, set())
+    def _merged_allowed_meta(
+            self, allowed_meta: set[str] | Iterable[str]) -> set[str]:
+        default_meta: set[str] = getattr(self, DEFAULT_META, set())
         return set(allowed_meta) | default_meta
 
     def _check_props_allowed(self, props: dict[str, Any]):
@@ -231,9 +236,10 @@ class BaseMetaDataMixin:
 
     def _bind_property_to(self, property_nm: str, ref: Reference):
         '''set the property to reference the object referenced by the key'''
+        old_val = getattr(self, property_nm)
         allowed_ref_types = getattr(self, '_KEY_REF_CONSTRAINTS', {})
-        if ref.key_type.rune_ref_tag not in allowed_ref_types.get(
-                property_nm, {}):
+        if (ref.key_type.rune_ref_tag not in allowed_ref_types.get(
+                property_nm, {}) and not _replaceable(old_val)):
             raise ValueError(f'Ref of type {ref.key_type} '
                              f'not allowed for {property_nm}. Allowed types '
                              f'are: {allowed_ref_types.get(property_nm, {})}')
@@ -245,18 +251,17 @@ class BaseMetaDataMixin:
             raise ValueError("Can't set reference. Incompatible types: "
                              f"expected {allowed_type}, "
                              f"got {ref.target.__class__}")
+
         refs = self.__dict__.setdefault(REFS_CONTAINER, {})
         if property_nm not in refs:
             # not a reference - check if allowed to replace with one
-            old_val = getattr(self, property_nm)
-            if not isinstance(
-                    old_val,
-                (BaseMetaDataMixin, UnresolvedReference, Reference)):
+            if not _replaceable(old_val):
                 raise ValueError(f'Property {property_nm} of type '
                                  f"{type(old_val)} can't be a reference")
             # pylint: disable=protected-access
             if isinstance(old_val, BaseMetaDataMixin):
                 old_val._check_props_allowed({ref.key_type.rune_ref_tag: ''})
+
         # setattr(self, property_nm, ref.target)  # nope - need to avoid here!
         self.__dict__[property_nm] = ref.target  # NOTE: avoid here setattr
         refs[property_nm] = (ref.target_key, ref.key_type)
