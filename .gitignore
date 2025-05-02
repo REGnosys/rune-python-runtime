@@ -18,3 +18,12 @@ website/.docusaurus
 website/npm-debug.log*
 website/yarn-debug.log*
 website/yarn-error.log*
+
+# python related artefacts and directories
+__pycache__
+.pydevenv
+build
+src/rune.runtime.egg-info
+rune.runtime-*.whl
+src/rune/runtime/version.py
+/.coverage
