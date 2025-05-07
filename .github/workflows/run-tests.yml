@@ -56,9 +56,10 @@ jobs:
         with:
           files: test-results.xml
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.xml
-          fail_ci_if_error: true
-          verbose: true
+      # disabled for now as codecov appears not to be working with xml reports
+      #- name: Upload coverage to Codecov
+      #  uses: codecov/codecov-action@v4
+      #  with:
+      #    files: coverage.xml
+      #    fail_ci_if_error: true
+      #    verbose: true
