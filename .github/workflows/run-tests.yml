@@ -31,10 +31,10 @@ jobs:
         run: |
           pytest --cov=rune.runtime --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=test-results.xml
 
-      - name: Debug - List files after pytest
-        run: |
-          pwd
-          ls -la
+      #- name: Debug - List files after pytest
+      #  run: |
+      #    pwd
+      #    ls -la
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -55,3 +55,10 @@ jobs:
         if: always()  # Run even if tests fail
         with:
           files: test-results.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: true
+          verbose: true
