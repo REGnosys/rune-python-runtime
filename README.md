@@ -1,4 +1,5 @@
 [![FINOS - Incubating](https://cdn.jsdelivr.net/gh/finos/contrib-toolbox@master/images/badge-incubating.svg)](https://community.finos.org/docs/governance/Software-Projects/stages/incubating)
+[![Run Unit Tests](https://github.com/Cloudrisk/rune-python-runtime/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/Cloudrisk/rune-python-runtime/actions/workflows/run-tests.yml)
 
 # Rune Python Runtime
 
