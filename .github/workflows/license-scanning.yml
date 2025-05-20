@@ -1,51 +1,29 @@
-name: License Scanning for Maven
+name: License Scanning for Python
 
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 8,18 * * 1-5'
   push:
-    branches:
-      - master
     paths:
-      - 'pom.xml'
-      - '.github/workflows/license-scanning.yml'
-  pull_request:
-    paths:
-      - 'pom.xml'
-      - '.github/workflows/license-scanning.yml'
+      - requirements.txt
+      - 'pyproject.toml'
+      - '.github/workflows/license-scanning-python.yml'
 
 env:
-  ALLOW_LICENSES: "'The Apache Software License, Version 2.0' and licenses/license/name!='BSD' and licenses/license/name!='BSD-style license' and licenses/license/name!='Apache License, Version 2.0'"
-  REPORT_PATH: "target/generated-resources/licenses.xml"
+  ALLOW_LICENSES: "MIT License;Apache Software License;BSD License"
+  # IGNORE_PACKAGES: ""
 
 jobs:
   scan:
+    name: Scan for licenses
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        module-folder: ["./", "./examples", "./rosetta-source"]
     steps:
-    - uses: actions/checkout@v3
-    - name: Install XQ
-      run: pip install xq
-    - uses: ./.github/actions/maven-build
-      with:
-        run-tests: false
-    - name: License XML report
-      run: mvn org.codehaus.mojo:license-maven-plugin:2.0.0:download-licenses
-    - name: Validate XML report
-      run: |
-        LICENSE_REPORT=`xq "//dependency[licenses/license/name!=${{ env.ALLOW_LICENSES }}]" ./${{ env.REPORT_PATH }}`
-        LINES_FOUND=`echo $LICENSE_REPORT | wc -l`
-        echo "License issues found ..."
-        if [ $LINES_FOUND -gt 1 ]; then echo $LICENSE_REPORT ; exit -1; fi
-      working-directory: ${{ matrix.module-folder }}
-    - name: Upload license reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: license-reports-${{ strategy.job-index }}
-        path: '**/dependencies.html'
-    - name: Upload license XML reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: license-xml-report-${{ strategy.job-index }}
-        path: '**/${{ env.REPORT_PATH }}'
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install pip-licenses
+        run: pip3 install pip-licenses
+      - name: Scan for licenses
+        run: pip-licenses --allow-only="${{ env.ALLOW_LICENSES }}" # --ignore-packages="${{ env.IGNORE_PACKAGES }}"
+        working-directory: python
