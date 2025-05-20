@@ -3,5 +3,5 @@ DataLicense: CC0-1.0
 Creator: CLOUDRISK Limited and FT Advisory LLC
 PackageName: Rune Python Runtime
 PackageOriginator: CLOUDRISK Limited and FT Advisory LLC
-PackageHomePage: https://github.com/finos/{project slug}
+PackageHomePage: https://github.com/finos/rune-python-runtime
 PackageLicenseDeclared: Apache-2.0
