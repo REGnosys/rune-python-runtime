@@ -77,7 +77,7 @@ _NOTE:_ Commits and pull requests to FINOS repositories will only be accepted fr
 
 ## License
 
-Copyright 2025 CLOUDRISK Limited and FT Advisory LLC
+Copyright 2023-2025 CLOUDRISK Limited and FT Advisory LLC
 
 Distributed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
