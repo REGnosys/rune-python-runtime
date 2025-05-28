@@ -1,4 +1,5 @@
 [![FINOS - Incubating](https://cdn.jsdelivr.net/gh/finos/contrib-toolbox@master/images/badge-incubating.svg)](https://community.finos.org/docs/governance/Software-Projects/stages/incubating)
+[![Run Unit Tests](https://github.com/Cloudrisk/rune-python-runtime/actions/workflows/run-tests.yml/badge.svg?branch=main)](https://github.com/Cloudrisk/rune-python-runtime/actions/workflows/run-tests.yml)
 
 # Rune Python Runtime
 
@@ -53,6 +54,11 @@ The Roadmap will be aligned to the Rune DSL and [CDM](https://github.com/finos/c
 
 In addition, the intention is to make future releases available at [PyPi](https://pypi.org)
 
+## Contributors
+- [CLOUDRISK Limited](https://www.cloudrisk.uk), email: info@cloudrisk.com
+- [FT Advisory LLC](https://www.ftadvisory.co), email: info@ftadvisory.co
+- [TradeHeader SL](https://www.tradeheader.com), email: info@tradeheader.com
+
 ## Contributing
 For any questions, bugs or feature requests please open an [issue](https://github.com/finos/{project slug}/issues)
 For anything else please send an email to {project mailing list}.
@@ -71,7 +77,7 @@ _NOTE:_ Commits and pull requests to FINOS repositories will only be accepted fr
 
 ## License
 
-Copyright {yyyy} {name of copyright owner}
+Copyright 2025 CLOUDRISK Limited and FT Advisory LLC
 
 Distributed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
