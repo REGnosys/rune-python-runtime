@@ -1,4 +1,4 @@
-name: scanning
+name: Safety Scan On Push or Pull
 on:
   push:  # Run on every push to any branch
   pull_request:  # Run on new pull requests
