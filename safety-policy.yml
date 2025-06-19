@@ -1,3 +1,4 @@
 security:
     ignore-cvss-severity-below: 6
     ignore-cvss-unknown-severity: False
+    ignore-unpinned-requirements: False
