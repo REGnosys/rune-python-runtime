@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8", "wheel", "pytest-runner"]
+requires = ["setuptools>=64", "setuptools_scm>=8", "wheel>=0.45.1", "pytest-runner>=6.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,9 +10,9 @@ dependencies = [
    "pydantic>=2.10.3"
 ]
 optional-dependencies.dev = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock"
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.14.1"
 ]
 description = "rune-runtime: the Rune DSL runtime for Python"
 readme = "README.md"

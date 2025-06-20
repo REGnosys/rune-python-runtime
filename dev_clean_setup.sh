@@ -33,5 +33,4 @@ ${PY_EXE} -m venv --clear .pydevenv || error
 . .pydevenv/${PY_SCRIPTS}/activate || error
 
 
-pip install -r dev_requirements.txt || error
-python -m pip install -e . --config-settings editable_mode=compat || error
+python -m pip install -e .[dev] --config-settings editable_mode=compat || error
